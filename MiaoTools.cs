@@ -87,7 +87,7 @@ public class ToolBox : EditorWindow
     private GUIStyle blueStyle;
 
 
-    [MenuItem("Tools/MiaoTools")]
+    [MenuItem("美术工具/MiaoTools")]
     public static void ShowWindow()
     {
         GetWindow<ToolBox>("MiaoTools");

@@ -6,7 +6,7 @@ using UnityEngine;
 using System;
 
 
-public class RenameUtility : EditorWindow
+public class RenamePlus : EditorWindow
 {
     private Vector2 scrollPosition;
     private string renameCSVPath = string.Empty;
@@ -32,7 +32,7 @@ public class RenameUtility : EditorWindow
     [MenuItem("美术工具/重命名工具/Rename Plus")]
     public static void ShowWindow()
     {
-        GetWindow<RenameUtility>("Rename Plus");
+        GetWindow<RenamePlus>("Rename Plus");
     }
 
     private void OnGUI()
