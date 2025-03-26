@@ -117,99 +117,10 @@ public class ToolBox : EditorWindow
         scrollPosition = GUILayout.BeginScrollView(scrollPosition);
         //开始滑条--------------------------------------------------
 
-        //---------------------------------------------------分区开始
-        GUILayout.Space(10); // 添加一些空隙
-        GUILayout.BeginVertical(blueStyle);
-        GUILayout.Label("通过CSV进行操作", EditorStyles.boldLabel);
-        //---------------------------------------------------分区开始
-
-        DrawFolderInput();
-        DrawOutputInput();
-
-        if (GUILayout.Button("Export"))
-        {
-            Export();
-        }
-
-        DrawRenameCSVInput();
-        outputCSVPath = DrawCsvFilePath("输出CSV文件路径:", outputCSVPath);
-        compareCSVPath = DrawCsvFilePath("对照CSV文件路径:", compareCSVPath);
-
-        if (GUILayout.Button("对比CSV并标记'未制作'"))
-        {
-            CompareAndMarkCSV();
-        }
-
-        //---------------------------------------------------分区结束
-        GUILayout.EndVertical();
-
-        //---------------------------------------------------分区结束
-
-        //---------------------------------------------------分区开始
-        GUILayout.Space(10); // 添加一些空隙
-        GUILayout.BeginVertical(greenStyle);
-        GUILayout.Label("资源批量重命名选项", EditorStyles.boldLabel);
-        //---------------------------------------------------分区开始
-        DrawPrefixSuffixInput();
-        DrawRenameOptions();
-        if (GUILayout.Button("批量重命名选中资源"))
-        {
-            BatchRenameAssets();
-        }
-
-        GUILayout.Space(10); // 添加一些空隙
-
-        GUILayout.Label("资产名称查找替换", EditorStyles.boldLabel);
-        EditorGUILayout.BeginHorizontal();
-        GUILayout.Label("将字符：", GUILayout.Width(100));
-        searchString = EditorGUILayout.TextField(searchString);
-        GUILayout.Label("替换为：", GUILayout.Width(100));
-        replaceString = EditorGUILayout.TextField(replaceString);
-        if (GUILayout.Button("查找替换", GUILayout.Width(100)))
-        {
-            FindAndReplaceInAssetNames(searchString, replaceString);
-        }
-        EditorGUILayout.EndHorizontal();
-
-        EditorGUILayout.BeginHorizontal();
-        EditorGUILayout.LabelField("删除字符数量:", GUILayout.Width(100));  // 控制标签的宽度
-        removeCharCount = EditorGUILayout.IntField(removeCharCount, GUILayout.Width(50));  // 控制输入字段的宽度
-        removeCharCount = Mathf.Max(0, removeCharCount);
-
-        if (GUILayout.Button("从前往后删除"))
-        {
-            RemoveCharactersFromAssetNames(start: true);
-        }
-        if (GUILayout.Button("从后往前删除"))
-        {
-            RemoveCharactersFromAssetNames(start: false);
-        }
-        EditorGUILayout.EndHorizontal();
-
-        GUILayout.Space(10); // 添加一些空隙
 
         GUILayout.Label("其他命名功能", EditorStyles.boldLabel);
 
-        EditorGUILayout.BeginHorizontal();
-        if (GUILayout.Button("选中命名为上上级文件夹名"))
-        {
-            RenameToGrandparentFolderName();
-        }
-        if (GUILayout.Button("重命名为顶级"))
-        {
-            RenameSelectedObjects();
-        }
-        if (GUILayout.Button("选中命名（Brick）"))
-        {
-            ReplaceTemplate();
-        }
-        EditorGUILayout.EndHorizontal();
-        EditorGUILayout.BeginHorizontal();
-        if (GUILayout.Button("命名为其引用prefab名称"))
-        {
-            RenameSelectedObjectsToPrefabName();
-        }
-        if (GUILayout.Button("重命名选中对象并添加索引"))
+
         {
             RenameSelectedObjectsWithIndex();
         }
@@ -218,55 +129,10 @@ public class ToolBox : EditorWindow
             SortGameObjectsByNumber();
         }
 
-        EditorGUILayout.EndHorizontal();
-
-
-
-
-        //---------------------------------------------------分区结束
-        GUILayout.EndVertical();
-        //---------------------------------------------------分区结束
-
         //---------------------------------------------------分区开始
-        GUILayout.BeginVertical("box");
-        //---------------------------------------------------分区开始
-
-        GUILayout.Space(10); // 添加一些空隙
 
         GUILayout.Label("复制变换", EditorStyles.boldLabel);
-        EditorGUILayout.BeginHorizontal();
-        if (GUILayout.Button("复制位置旋转变换"))
-        {
-            CopyTransform();
-        }
 
-
-
-
-        if (GUILayout.Button("粘贴位置旋转变换"))
-        {
-            PasteTransform();
-        }
-
-        if (GUILayout.Button("交换位置旋转"))
-        {
-            SwapTransforms();
-        }
-        if (GUILayout.Button("批量复制底部中心位置"))
-        {
-            RecordPositions();
-        }
-        if (GUILayout.Button("批量粘贴底部中心位置"))
-        {
-            PastePositions();
-        }
-        if (GUILayout.Button("尺寸缩小100比例"))
-        {
-            ResizeSelectedObject();
-        }
-
-
-        EditorGUILayout.EndHorizontal();
 
         GUILayout.Space(10); // 添加一些空隙
 
@@ -296,145 +162,6 @@ public class ToolBox : EditorWindow
 
         //---------------------------------------------------分区结束
 
-
-        // EditorGUILayout.BeginHorizontal();
-        // xSpacing = EditorGUILayout.FloatField("X Spacing", xSpacing);
-        // zSpacing = EditorGUILayout.FloatField("Z Spacing", zSpacing);
-        // EditorGUILayout.EndHorizontal();
-
-        GUILayout.Space(10); // 添加一些空隙
-
-        GUILayout.Label("Array Duplicate Options", EditorStyles.boldLabel);
-
-        numberOfCopies = EditorGUILayout.IntField("Number of Copies", numberOfCopies);
-        distance = EditorGUILayout.FloatField("Distance", distance);
-
-        GUILayout.Label("Axis");
-        EditorGUILayout.BeginHorizontal();
-        xAxis = EditorGUILayout.Toggle("X", xAxis);
-        yAxis = EditorGUILayout.Toggle("Y", yAxis);
-        zAxis = EditorGUILayout.Toggle("Z", zAxis);
-        EditorGUILayout.EndHorizontal();
-
-        if (GUILayout.Button("Duplicate Selected"))
-        {
-            ArrayDuplicate();
-        }
-
-        EditorGUILayout.LabelField("矩形阵列所选物体", EditorStyles.boldLabel);
-        EditorGUILayout.BeginHorizontal();
-        EditorGUILayout.LabelField("X Spacing", GUILayout.Width(100));  // 控制标签的宽度
-        xSpacing = EditorGUILayout.FloatField(xSpacing);  // 自动调整宽度
-        EditorGUILayout.LabelField("Z Spacing", GUILayout.Width(100));  // 控制标签的宽度
-        zSpacing = EditorGUILayout.FloatField(zSpacing);  // 自动调整宽度
-        if (GUILayout.Button("阵列所选物体"))
-        {
-            ArrangeSelectedObjects();
-        }
-        EditorGUILayout.EndHorizontal();
-
-
-        GUILayout.Space(10); // 添加一些空隙
-
-        //圆周阵列
-        EditorGUILayout.LabelField("圆周阵列", EditorStyles.boldLabel);
-
-        EditorGUILayout.BeginHorizontal();
-        EditorGUILayout.LabelField("中心参照物", GUILayout.Width(100));  // 控制标签的宽度
-        centerObject = (GameObject)EditorGUILayout.ObjectField(centerObject, typeof(GameObject), true);  // 控制对象字段的宽度
-        EditorGUILayout.LabelField("阵列物体", GUILayout.Width(100));  // 控制标签的宽度
-        objectToDuplicate = (GameObject)EditorGUILayout.ObjectField(objectToDuplicate, typeof(GameObject), true);  // 控制对象字段的宽度
-        EditorGUILayout.EndHorizontal();
-
-        EditorGUILayout.BeginHorizontal();
-        EditorGUILayout.LabelField("计数", GUILayout.Width(100));  // 控制标签的宽度
-        count = EditorGUILayout.IntField(count, GUILayout.Width(100));  // 控制输入字段的宽度
-        EditorGUILayout.LabelField("自动半径", GUILayout.Width(100));
-        autoCalculateRadius = EditorGUILayout.Toggle(autoCalculateRadius, GUILayout.Width(16));  // 控制Toggle的宽度
-        if (!autoCalculateRadius)
-        {
-            EditorGUILayout.LabelField("直径", GUILayout.Width(50));  // 控制标签的宽度
-            radius = EditorGUILayout.FloatField(radius, GUILayout.Width(50));  // 控制输入字段的宽度
-        }
-        EditorGUILayout.LabelField("朝向中心", GUILayout.Width(100));
-        lookAtCenter = EditorGUILayout.Toggle(lookAtCenter, GUILayout.Width(16));  // 控制Toggle的宽度
-        if (GUILayout.Button("计算阵列"))
-        {
-            if (centerObject != null && objectToDuplicate != null)
-            {
-                if (autoCalculateRadius)
-                {
-                    // 自动计算半径
-                    radius = Vector3.Distance(centerObject.transform.position, objectToDuplicate.transform.position);
-                }
-                GenerateCircleArray();
-            }
-            else
-            {
-                Debug.LogWarning("Please assign the Center Object and Object to Duplicate.");
-            }
-        }
-        EditorGUILayout.EndHorizontal();
-
-        GUILayout.Space(10); // 添加一些空隙
-
-        EditorGUILayout.LabelField("单个替换", EditorStyles.boldLabel);
-
-        EditorGUILayout.BeginHorizontal();
-        EditorGUILayout.LabelField("将：", GUILayout.Width(100));  // 控制标签的宽度
-        targetPrefab = (GameObject)EditorGUILayout.ObjectField(targetPrefab, typeof(GameObject), false);  // 自动调整宽度
-        EditorGUILayout.EndHorizontal();
-
-        EditorGUILayout.BeginHorizontal();
-        EditorGUILayout.LabelField("替换为：", GUILayout.Width(100));  // 控制标签的宽度
-        replacementPrefab = (GameObject)EditorGUILayout.ObjectField(replacementPrefab, typeof(GameObject), false);  // 自动调整宽度
-        EditorGUILayout.EndHorizontal();
-
-
-        if (GUILayout.Button("替换预制体资产中的组件"))
-        {
-            if (targetPrefab == null || replacementPrefab == null)
-            {
-                EditorUtility.DisplayDialog("Error", "Please assign both Target Prefab and Replacement Prefab", "OK");
-            }
-            else
-            {
-                ReplaceNestedPrefabsInSelectedPrefabs(targetPrefab, replacementPrefab);
-            }
-        }
-        EditorGUILayout.Space();
-
-        GUILayout.Space(10); // 添加一些空隙
-
-        EditorGUILayout.LabelField("批量替换", EditorStyles.boldLabel);
-        pathA = EditorGUILayout.TextField("将此路径下prefab包含资产（vox）：", pathA);
-        pathB = EditorGUILayout.TextField("替换为此路径下同名称资产（prefab）：", pathB);
-        if (GUILayout.Button("选取prefab资产后按路径批量替换同名组件"))
-        {
-            if (string.IsNullOrEmpty(pathA) || string.IsNullOrEmpty(pathB))
-            {
-                EditorUtility.DisplayDialog("Error", "Please assign both Path A and Path B", "OK");
-            }
-            else if (!Directory.Exists(pathA) || !Directory.Exists(pathB))
-            {
-                EditorUtility.DisplayDialog("Error", "One or both paths do not exist", "OK");
-            }
-            else
-            {
-                BatchReplacePrefabs(pathA, pathB);
-            }
-        }
-
-        GUILayout.Space(10); // 添加一些空隙
-
-        GUILayout.Label("资产批量替换", EditorStyles.boldLabel);
-        assetToReplace = (GameObject)EditorGUILayout.ObjectField("将所选组件替换为：", assetToReplace, typeof(GameObject), false);
-        if (GUILayout.Button("使用新资产替换物体"))
-        {
-            {
-                Replace();
-            }
-        }
 
         GUILayout.Space(10); // 添加一些空隙
 
@@ -1354,6 +1081,7 @@ public class ToolBox : EditorWindow
             return xMatches.Count.CompareTo(yMatches.Count);
         }
     }
+
     void SortGameObjectsByNumber()
     {
         if (Selection.transforms.Length > 0)

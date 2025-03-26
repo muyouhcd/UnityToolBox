@@ -67,11 +67,9 @@ public class RenamePlus : EditorWindow
 
 
         GUILayout.Space(20);
-        GUILayout.Label("资源批量重命名选项", EditorStyles.boldLabel);
+        GUILayout.Label("批量重命名选项", EditorStyles.boldLabel);
 
         EditorGUILayout.BeginHorizontal();
-
-
 
 
         GUILayout.Label("前缀");
@@ -130,6 +128,8 @@ public class RenamePlus : EditorWindow
             FindAndReplaceInAssetNames(searchString, replacementString, new[] { searchPath }, caseSensitive);
         }
 
+        GUILayout.Space(20);
+
         EditorGUILayout.BeginHorizontal();
         EditorGUILayout.LabelField("删除字符数量:", GUILayout.Width(100));
         removeCharCount = EditorGUILayout.IntField(removeCharCount);
@@ -146,6 +146,22 @@ public class RenamePlus : EditorWindow
             RemoveCharactersFromAssetNames(start: false);
         }
         EditorGUILayout.EndHorizontal();
+
+        GUILayout.Space(20);
+
+        GUILayout.BeginHorizontal();
+        assetPath = DrawFilePathField("处理路径", assetPath, "选择文件夹", "", true);
+        GUILayout.EndHorizontal();
+
+        GUILayout.BeginHorizontal();
+        GUILayout.Label("基础名称", GUILayout.Width(100));
+        baseName = GUILayout.TextField(baseName);
+        GUILayout.EndHorizontal();
+
+        if (GUILayout.Button("资产名称重命名为基础名称（自动加编号，唯一）"))
+        {
+            RenameToUniqueName(assetPath, baseName);
+        }
         // 其他命名功能
 
         GUILayout.Space(20);
@@ -166,19 +182,7 @@ public class RenamePlus : EditorWindow
 
         GUILayout.Space(20);
 
-        GUILayout.BeginHorizontal();
-        assetPath = DrawFilePathField("处理路径", assetPath, "选择文件夹", "", true);
-        GUILayout.EndHorizontal();
 
-        GUILayout.BeginHorizontal();
-        GUILayout.Label("基础名称", GUILayout.Width(100));
-        baseName = GUILayout.TextField(baseName);
-        GUILayout.EndHorizontal();
-
-        if (GUILayout.Button("资产名称重命名为基础名称（自动加编号，唯一）"))
-        {
-            RenameToUniqueName(assetPath, baseName);
-        }
 
 
         GUILayout.EndScrollView();
