@@ -1739,7 +1739,7 @@ public class ToolBox : EditorWindow
         Undo.FlushUndoRecordObjects();
     }
 
-    [Shortcut("Custom Tools/Drop Objects to Mesh", KeyCode.D, ShortcutModifiers.Shift | ShortcutModifiers.Control)]
+    // [Shortcut("Custom Tools/Drop Objects to Mesh", KeyCode.D, ShortcutModifiers.Shift | ShortcutModifiers.Control)]
     public static void DropSelectedObjectsToMesh()
     {
         var selectedObjects = Selection.gameObjects;
