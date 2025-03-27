@@ -21,16 +21,16 @@ public class Replacer : EditorWindow
 
     public GameObject assetToReplace; // 要替换的资产
 
+    private GameObject prefabToReplaceWith;
+
     private string prefabPath = "Assets/Prefabs";
 
     private Dictionary<GameObject, GameObject> prefabSourceToPrefabMap = new Dictionary<GameObject, GameObject>();
 
-
-
     private string pathA;
     private string pathB;
 
-    [MenuItem("美术工具/替换工具/Replacer")]
+    [MenuItem("美术工具/替换工具/ObjectReplacer")]
     public static void ShowWindow()
     {
         GetWindow<Replacer>("Replacer");
@@ -98,8 +98,7 @@ public class Replacer : EditorWindow
 
 
 
-
-
+        GUILayout.BeginHorizontal();
         prefabPath = EditorGUILayout.TextField("Prefab存放路径", prefabPath);
         if (GUILayout.Button("浏览", GUILayout.MaxWidth(100)))
         {
@@ -111,13 +110,23 @@ public class Replacer : EditorWindow
                 prefabPath = Path.GetFullPath(path).Replace(Path.GetFullPath(Application.dataPath), "Assets");
             }
         }
-        // EditorGUILayout.EndHorizontal();
+        EditorGUILayout.EndHorizontal();
+
+
         if (GUILayout.Button("转换为Prefab"))
         {
             GeneratePrefabs();
         }
 
+        GUILayout.Space(10); // 添加一些空隙
 
+
+        GUILayout.Label("使用指定物体替换所选物体", EditorStyles.boldLabel);
+        prefabToReplaceWith = (GameObject)EditorGUILayout.ObjectField("Prefab", prefabToReplaceWith, typeof(GameObject), false);
+        if (GUILayout.Button("替换所选"))
+        {
+            ReplaceSelectedObjects();
+        }
 
 
         GUILayout.EndScrollView();
@@ -363,4 +372,37 @@ public class Replacer : EditorWindow
         DestroyImmediate(originalObject);
     }
 
+
+    private void ReplaceSelectedObjects()
+    {
+        if (prefabToReplaceWith == null || !PrefabUtility.IsPartOfPrefabAsset(prefabToReplaceWith))
+        {
+            Debug.LogError("请选择一个有效的 Prefab 资产。");
+            return;
+        }
+
+        GameObject[] selectedObjects = Selection.gameObjects;
+
+        if (selectedObjects.Length == 0)
+        {
+            Debug.LogError("请在场景中选择一个或多个物体。");
+            return;
+        }
+
+        Undo.RegisterCompleteObjectUndo(selectedObjects, "Replace with Prefab");
+
+        foreach (GameObject obj in selectedObjects)
+        {
+            Vector3 originalPosition = obj.transform.position;
+            Quaternion originalRotation = obj.transform.rotation;
+
+            Undo.DestroyObjectImmediate(obj);
+
+            GameObject newObject = (GameObject)PrefabUtility.InstantiatePrefab(prefabToReplaceWith);
+            newObject.transform.position = originalPosition;
+            newObject.transform.rotation = originalRotation;
+
+            Undo.RegisterCreatedObjectUndo(newObject, "Replace with Prefab");
+        }
+    }
 }

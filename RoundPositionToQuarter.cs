@@ -3,7 +3,7 @@ using UnityEngine;
 
 public class RoundPositionEditor : EditorWindow
 {
-    [MenuItem("美术工具/排列工具/选取物体四舍五入取整0.25排列")]
+    [MenuItem("美术工具/地编工具/选取物体位置取整0.25")]
     static void RoundPositionToQuarter()
     {
         foreach (GameObject obj in Selection.gameObjects)

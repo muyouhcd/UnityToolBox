@@ -11,6 +11,10 @@ public class FbxMatChanger : EditorWindow
     private static readonly string materialImportModePattern = @"materialImportMode: \d";
     private static readonly string externalObjectsPattern = @"externalObjects:\s*\{\s*\}";
 
+    string changeShaderName = "Universal Render Pipeline/Lit";
+    string folderPath = "";
+    string shaderName = "Universal Render Pipeline/Lit";
+
 
     [MenuItem("美术工具/材质修改工具/材质修改（批量）")]
     public static void ShowWindow()
@@ -44,12 +48,40 @@ public class FbxMatChanger : EditorWindow
         }
 
 
+        GUILayout.Space(10); // 添加一些空隙
+        GUILayout.Label("Shader更改", EditorStyles.boldLabel);
 
-        if (GUILayout.Button("批量更改shader为URPLit"))
+
+        changeShaderName = GUILayout.TextField(changeShaderName);
+        if (GUILayout.Button("批量更改shader为指定名称shader"))
         {
-            ChangeShader();
-
+            ChangeShader(changeShaderName);
         }
+
+        GUILayout.Space(10); // 添加一些空隙
+
+        GUILayout.Label("FBX材质生成（支持批量）", EditorStyles.boldLabel);
+
+        GUILayout.BeginHorizontal();
+
+        // GUILayout.Label("选择文件夹路径", GUILayout.Width(150)); // 调整标签宽度
+        // folderPath = EditorGUILayout.TextField(folderPath);
+
+        folderPath = DrawFilePathField("处理路径", folderPath, "选择文件夹", "", true);
+        GUILayout.EndHorizontal();
+
+        GUILayout.BeginHorizontal();
+        GUILayout.Label("材质球shader名称", GUILayout.Width(100)); // 调整标签宽度
+        shaderName = EditorGUILayout.TextField(shaderName);
+        GUILayout.EndHorizontal();
+
+        if (GUILayout.Button("对路径下fbx生成材质球"))
+        {
+            GenerateMaterials(folderPath, shaderName);
+        }
+
+
+
 
         GUILayout.EndScrollView();
     }
@@ -129,15 +161,15 @@ public class FbxMatChanger : EditorWindow
     }
 
 
-    private static void ChangeShader()
+    private static void ChangeShader(string changeShaderName)
     {
         // Define the URP Lit Shader
-        Shader urpLitShader = Shader.Find("Universal Render Pipeline/Lit");
+        Shader urpLitShader = Shader.Find(changeShaderName);
 
         // Check that the URP Lit Shader exists
         if (urpLitShader == null)
         {
-            Debug.LogError("Universal Render Pipeline/Lit shader not found in the project.");
+            Debug.LogError("无法查找到对应名称shader");
             return;
         }
 
@@ -146,7 +178,7 @@ public class FbxMatChanger : EditorWindow
 
         if (selectedObjects.Length == 0)
         {
-            Debug.LogWarning("No GameObjects selected. Please select GameObjects to change their shaders.");
+            Debug.LogWarning("没有物体选中，选中物体后再进行修改");
             return;
         }
 
@@ -174,6 +206,123 @@ public class FbxMatChanger : EditorWindow
         }
 
         Debug.Log($"Changed shader to Universal Render Pipeline/Lit for {changedMaterialsCount} materials.");
+    }
+
+
+
+
+    public static void GenerateMaterials(string folderPath, string shaderName)
+    {
+
+        if (!AssetDatabase.IsValidFolder(folderPath))
+        {
+            Debug.LogError("Folder path is not valid");
+            return;
+        }
+
+        string[] fbxFiles = Directory.GetFiles(folderPath, "*.fbx", SearchOption.TopDirectoryOnly);
+
+        foreach (string fbxFile in fbxFiles)
+        {
+            string fileNameWithoutExtension = Path.GetFileNameWithoutExtension(fbxFile);
+
+            string baseMapPath = Path.Combine(folderPath, $"{fileNameWithoutExtension}_Abedel.png");
+            string colorMaskPath = Path.Combine(folderPath, $"{fileNameWithoutExtension}_ColorMask.png");
+            string emissionMaskPath = Path.Combine(folderPath, $"{fileNameWithoutExtension}_EmissionMask.png");
+
+            Material material = new Material(Shader.Find(shaderName))
+            {
+                name = fileNameWithoutExtension
+            };
+
+            if (File.Exists(baseMapPath))
+            {
+                material.SetTexture("_BaseMap", LoadTexture(baseMapPath));
+            }
+
+            if (File.Exists(colorMaskPath))
+            {
+                material.SetTexture("_ColorMask", LoadTexture(colorMaskPath));
+            }
+
+            if (File.Exists(emissionMaskPath))
+            {
+                material.SetTexture("_EmissionMask", LoadTexture(emissionMaskPath));
+            }
+
+            string materialPath = Path.Combine(folderPath, $"{fileNameWithoutExtension}.mat");
+            AssetDatabase.CreateAsset(material, materialPath);
+        }
+
+        AssetDatabase.SaveAssets();
+        AssetDatabase.Refresh();
+        Debug.Log("Material generation finished.");
+    }
+
+    private static Texture LoadTexture(string path)
+    {
+        return AssetDatabase.LoadAssetAtPath<Texture>(path);
+    }
+
+
+
+
+
+
+
+    private string DrawFilePathField(string label, string path, string panelTitle, string extension, bool isDirectory)
+    {
+        EditorGUILayout.BeginHorizontal();
+        EditorGUILayout.LabelField(label, GUILayout.Width(100));
+        path = EditorGUILayout.TextField(path);
+        if (GUILayout.Button(isDirectory ? "浏览" : "选择", GUILayout.Width(60)))
+        {
+            string initialPath = string.IsNullOrEmpty(path) ? Application.dataPath : path;
+
+            // 如果路径是相对于 Assets 的路径，转换为完整路径
+            if (path.StartsWith("Assets/") || path.StartsWith("Assets\\"))
+            {
+                initialPath = Path.Combine(Directory.GetParent(Application.dataPath).FullName, path);
+            }
+
+            string selectedPath;
+            if (isDirectory)
+            {
+                selectedPath = EditorUtility.OpenFolderPanel(panelTitle, initialPath, "");
+            }
+            else
+            {
+                // 如果是保存文件的场景
+                if (panelTitle.Contains("选择") && string.IsNullOrEmpty(extension))
+                {
+                    selectedPath = EditorUtility.SaveFilePanel(panelTitle, Path.GetDirectoryName(initialPath),
+                        Path.GetFileNameWithoutExtension(initialPath) ?? "output", "csv");
+                }
+                else
+                {
+                    selectedPath = EditorUtility.OpenFilePanel(panelTitle, Path.GetDirectoryName(initialPath), extension);
+                }
+            }
+
+            if (!string.IsNullOrEmpty(selectedPath))
+            {
+                // 处理路径转换
+                if (selectedPath.StartsWith(Application.dataPath))
+                {
+                    // 转换为相对于项目的路径
+                    path = "Assets" + selectedPath.Substring(Application.dataPath.Length);
+                    Debug.Log($"转换为项目相对路径: {path}");
+                }
+                else
+                {
+                    path = selectedPath;
+                    Debug.Log($"使用绝对路径: {path}");
+                }
+            }
+        }
+
+        EditorGUILayout.EndHorizontal();
+        return path;
     }
 
 }
