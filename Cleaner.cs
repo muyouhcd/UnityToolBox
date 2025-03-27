@@ -33,7 +33,7 @@ public class Cleaner : EditorWindow
 
         EditorGUILayout.BeginHorizontal();
 
-        EditorGUILayout.LabelField("清理路径", GUILayout.Width(100));
+        EditorGUILayout.LabelField("清理路径（递归）", GUILayout.Width(100));
         directoryPath = EditorGUILayout.TextField(directoryPath);
 
         if (GUILayout.Button("浏览", GUILayout.Width(100)))
@@ -44,7 +44,7 @@ public class Cleaner : EditorWindow
                 directoryPath = selectedPath.Replace("/", "\\");
             }
         }
-        if (GUILayout.Button("清理文件夹", GUILayout.Width(100)))
+        if (GUILayout.Button("清理", GUILayout.Width(100)))
         {
             Clean(directoryPath);
         }

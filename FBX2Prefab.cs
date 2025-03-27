@@ -7,7 +7,7 @@ public class FBXToPrefabConverterWindow : EditorWindow
     private string fbxFolderPath = "Assets/YourFBXFolder";
     private string prefabFolderPath = "Assets/Prefabs";
 
-    [MenuItem("ç¾æœ¯å·¥å…·/ç”Ÿæˆå·¥å…·/FBXè½¬æ¢ä¸ºPrefab")]
+    [MenuItem("ÃÀÊõ¹¤¾ß/Éú³É¹¤¾ß/FBX×ª»»ÎªPrefab")]
     public static void ShowWindow()
     {
         GetWindow<FBXToPrefabConverterWindow>("FBX to Prefab Converter");
@@ -55,7 +55,6 @@ public class FBXToPrefabConverterWindow : EditorWindow
                 continue;
             }
 
-            // ï¿½ï¿½Ó¡FBXï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
             foreach (Transform child in fbxObject.GetComponentsInChildren<Transform>())
             {
                 Debug.Log("Found child: " + child.name);
@@ -63,7 +62,6 @@ public class FBXToPrefabConverterWindow : EditorWindow
 
             GameObject prefabInstance = new GameObject(fbxObject.name);
 
-            // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½å²¢ï¿½ï¿½ï¿½Óµï¿½Prefab
             foreach (Transform child in fbxObject.transform)
             {
                 string childNameLower = child.name.ToLower();

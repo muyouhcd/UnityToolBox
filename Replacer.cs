@@ -21,6 +21,10 @@ public class Replacer : EditorWindow
 
     public GameObject assetToReplace; // 要替换的资产
 
+    private string prefabPath = "Assets/Prefabs";
+
+    private Dictionary<GameObject, GameObject> prefabSourceToPrefabMap = new Dictionary<GameObject, GameObject>();
+
 
 
     private string pathA;
@@ -91,6 +95,30 @@ public class Replacer : EditorWindow
                 Replace();
             }
         }
+
+
+
+
+
+        prefabPath = EditorGUILayout.TextField("Prefab存放路径", prefabPath);
+        if (GUILayout.Button("浏览", GUILayout.MaxWidth(100)))
+        {
+            // 打开文件夹选择对话框，并将选择的路径赋值给prefabPath
+            string path = EditorUtility.OpenFolderPanel("选择输出目录", prefabPath, "");
+            if (!string.IsNullOrEmpty(path))
+            {
+                // 仅当选择了目录（没有点击取消）时才更新路径
+                prefabPath = Path.GetFullPath(path).Replace(Path.GetFullPath(Application.dataPath), "Assets");
+            }
+        }
+        // EditorGUILayout.EndHorizontal();
+        if (GUILayout.Button("转换为Prefab"))
+        {
+            GeneratePrefabs();
+        }
+
+
+
 
         GUILayout.EndScrollView();
     }
@@ -242,6 +270,97 @@ public class Replacer : EditorWindow
     int GetFileDepth(string filePath, string basePath)
     {
         return filePath.Substring(basePath.Length).Split(Path.DirectorySeparatorChar).Length;
+    }
+
+
+    void GeneratePrefabs()
+    {
+        // 清空映射表
+        prefabSourceToPrefabMap.Clear();
+
+        // 预先检测保存目录
+        if (!System.IO.Directory.Exists(prefabPath))
+        {
+            System.IO.Directory.CreateDirectory(prefabPath);
+            Debug.Log($"Created directory at {prefabPath}");
+        }
+
+        // 扫描目标目录下所有Prefab并建立源Prefab映射表
+        string[] prefabGUIDs = AssetDatabase.FindAssets("t:Prefab", new[] { prefabPath });
+        foreach (var guid in prefabGUIDs)
+        {
+            string prefabAssetPath = AssetDatabase.GUIDToAssetPath(guid);
+            GameObject prefabAsset = AssetDatabase.LoadAssetAtPath<GameObject>(prefabAssetPath);
+            GameObject sourcePrefab = PrefabUtility.GetCorrespondingObjectFromSource(prefabAsset);
+
+            if (sourcePrefab != null && !prefabSourceToPrefabMap.ContainsKey(sourcePrefab))
+            {
+                prefabSourceToPrefabMap.Add(sourcePrefab, prefabAsset);
+            }
+        }
+
+        foreach (GameObject obj in Selection.gameObjects)
+        {
+
+            GameObject sourcePrefab = PrefabUtility.GetCorrespondingObjectFromSource(obj);
+
+            // 检查场景物体的源Prefab是否在映射表中
+            if (sourcePrefab != null && prefabSourceToPrefabMap.ContainsKey(sourcePrefab))
+            {
+                // 使用映射表中的Prefab替换场景中的物体
+                ReplaceSceneObjectWithPrefab(obj, prefabSourceToPrefabMap[sourcePrefab]);
+                continue;
+            }
+
+            // 创建Prefab的本地路径
+            string localPath = $"{prefabPath}/{obj.name}.prefab";
+            if (System.IO.File.Exists(localPath))
+            {
+                // 如果该路径下已有Prefab，更新映射表并替换场景物体
+                GameObject existingPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(localPath);
+                prefabSourceToPrefabMap.Add(obj, existingPrefab);
+                ReplaceSceneObjectWithPrefab(obj, existingPrefab);
+                continue;
+            }
+
+            // 创建新的Prefab
+            GameObject prefabInstance = Instantiate(obj);
+            prefabInstance.name = obj.name;
+            prefabInstance.transform.SetParent(null);
+
+            GameObject newPrefab = PrefabUtility.SaveAsPrefabAsset(prefabInstance, localPath);
+            if (newPrefab != null)
+            {
+                Debug.Log($"Prefab created: {localPath}");
+                prefabSourceToPrefabMap.Add(sourcePrefab, newPrefab);
+                ReplaceSceneObjectWithPrefab(obj, newPrefab);
+            }
+            else
+            {
+                Debug.LogError($"Failed to create prefab: {localPath}");
+            }
+
+            // 删除临时的Prefab副本
+            DestroyImmediate(prefabInstance);
+        }
+
+        AssetDatabase.SaveAssets();
+        AssetDatabase.Refresh();
+    }
+    private void ReplaceSceneObjectWithPrefab(GameObject originalObject, GameObject prefab)
+    {
+        // 通过InstantiatePrefab实例化新的Prefab
+        GameObject prefabInstance = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
+
+        // 设置替换对象的父对象和变换信息
+        prefabInstance.transform.SetParent(originalObject.transform.parent);
+        prefabInstance.transform.position = originalObject.transform.position;
+        prefabInstance.transform.rotation = originalObject.transform.rotation;
+        prefabInstance.transform.localScale = originalObject.transform.localScale;
+        Selection.activeGameObject = prefabInstance;
+
+        // 最后，销毁原场景中的物体
+        DestroyImmediate(originalObject);
     }
 
 }

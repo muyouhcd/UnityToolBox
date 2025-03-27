@@ -23,7 +23,6 @@ public class TransformManager : EditorWindow
     private GameObject targetPrefab;  // 要查找的嵌套预制体
     private static List<Vector3> recordedPositions = new List<Vector3>();
 
-
     private int numberOfCopies = 5;
     private float distance = 1.0f;
     private bool xAxis = true;
