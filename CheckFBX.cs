@@ -13,7 +13,7 @@ using System.Linq;
 
 public class FBXChecker : EditorWindow
 {
-    private string folderPath = "D:/work/art/ArtProject/Assets/ArtResources/Character/Clothing/Upper";
+    private string folderPath = "Assets/ArtResources/Character/Clothing/Upper";
     private List<string> noRootFBXFiles = new List<string>();
     private Vector2 scrollPosition;
     private bool showFullPath = false;
@@ -33,8 +33,8 @@ public class FBXChecker : EditorWindow
         GUILayout.Label("选择文件夹路径", EditorStyles.boldLabel);
 
         EditorGUILayout.BeginHorizontal();
-        folderPath = EditorGUILayout.TextField("路径", folderPath, GUILayout.Height(20));
-        if (GUILayout.Button("浏览", GUILayout.Width(60), GUILayout.Height(20)))
+        folderPath = EditorGUILayout.TextField("路径", folderPath);
+        if (GUILayout.Button("浏览", GUILayout.Width(60)))
         {
             string selectedPath = EditorUtility.OpenFolderPanel("选择FBX文件夹", Application.dataPath, "");
             if (!string.IsNullOrEmpty(selectedPath))
@@ -45,7 +45,8 @@ public class FBXChecker : EditorWindow
         }
         EditorGUILayout.EndHorizontal();
 
-        if (GUILayout.Button("检查FBX文件"))
+
+        if (GUILayout.Button("检查FBX文件", GUILayout.Height(30)))
         {
             CheckFBXFiles(folderPath);
         }

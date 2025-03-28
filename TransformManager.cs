@@ -12,6 +12,21 @@ using UnityEngine.SceneManagement;
 using UnityEditor.SceneManagement;
 using UnityEngine.UI;
 using System.Security.Cryptography;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using UnityEditor;
+using UnityEngine;
+using System;
+using System.Text.RegularExpressions;
+using UnityEditor.ShortcutManagement;
+using Unity.AI.Navigation; // 确保导入正确的命名空间
+using UnityEditor.Experimental.SceneManagement;
+using UnityEngine.SceneManagement;
+using UnityEditor.SceneManagement;
+using UnityEngine.UI;
+using System.Security.Cryptography;
+
 
 
 public class TransformManager : EditorWindow
@@ -53,7 +68,12 @@ public class TransformManager : EditorWindow
     {
         scrollPosition = GUILayout.BeginScrollView(scrollPosition);
 
+        if (GUILayout.Button("下落物体"))
+        {
+            DropSelectedObjectsToMesh();
+        }
 
+        GUILayout.Space(10); // 添加一些空隙
 
         if (GUILayout.Button("复制位置旋转变换"))
         {
@@ -63,10 +83,12 @@ public class TransformManager : EditorWindow
         {
             PasteTransform();
         }
+        GUILayout.Space(10); // 添加一些空隙
         if (GUILayout.Button("选取两个物体交换位置旋转"))
         {
             SwapTransforms();
         }
+        GUILayout.Space(10); // 添加一些空隙
         if (GUILayout.Button("批量复制底部中心位置（需要同名）"))
         {
             RecordPositions();
@@ -75,6 +97,7 @@ public class TransformManager : EditorWindow
         {
             PastePositions();
         }
+        GUILayout.Space(10); // 添加一些空隙
         if (GUILayout.Button("尺寸缩小100比例"))
         {
             ResizeSelectedObject();
@@ -520,6 +543,82 @@ public class TransformManager : EditorWindow
         }
         return r;
     }
+
+
+
+    
+    public static void DropSelectedObjectsToMesh()
+    {
+        var selectedObjects = Selection.gameObjects;
+
+        if (selectedObjects.Length == 0)
+        {
+            Debug.Log("No objects selected. Please select at least one GameObject.");
+            return;
+        }
+
+        List<Collider> addedColliders = new List<Collider>();
+        EnsureCollidersExistAndGather(ref addedColliders);
+
+        DropObjectsToMesh(selectedObjects, ref addedColliders);
+
+        CleanupAddedColliders(addedColliders);
+    }
+    private static void CleanupAddedColliders(List<Collider> addedColliders)
+    {
+        foreach (Collider addedCollider in addedColliders)
+        {
+            if (addedCollider != null)
+            {
+                DestroyImmediate(addedCollider);
+            }
+        }
+    }
+
+
+    private static void EnsureCollidersExistAndGather(ref List<Collider> addedColliders)
+    {
+        foreach (GameObject obj in FindObjectsOfType<GameObject>())
+        {
+            if (obj.GetComponent<MeshRenderer>() != null && obj.GetComponent<Collider>() == null)
+            {
+                MeshCollider newCollider = obj.AddComponent<MeshCollider>();
+                addedColliders.Add(newCollider);
+            }
+        }
+    }
+    private static void DropObjectsToMesh(GameObject[] selectedObjects, ref List<Collider> addedColliders)
+    {
+        foreach (GameObject obj in selectedObjects)
+        {
+            Collider collider = obj.GetComponent<Collider>();
+            if (collider == null)
+            {
+                collider = obj.AddComponent<BoxCollider>();
+                addedColliders.Add(collider);
+            }
+
+            RaycastHit hit;
+            Vector3 colliderBottom = GetColliderBottomPoint(collider);
+
+            if (Physics.Raycast(colliderBottom, Vector3.down, out hit))
+            {
+                obj.transform.position = new Vector3(obj.transform.position.x, hit.point.y, obj.transform.position.z);
+                Debug.Log(obj.name + " dropped to mesh at " + hit.point);
+            }
+            else
+            {
+                Debug.LogWarning("No mesh found under " + obj.name + ". Object has not been moved.");
+            }
+        }
+    }
+    private static Vector3 GetColliderBottomPoint(Collider collider)
+    {
+        Vector3 bottomCenterPoint = collider.bounds.center;
+        bottomCenterPoint.y -= collider.bounds.extents.y;
+        return bottomCenterPoint;
+    }
+
 
 
 
