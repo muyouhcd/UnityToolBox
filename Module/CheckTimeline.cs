@@ -6,6 +6,8 @@ using System.Collections.Generic;
 using Sirenix.OdinInspector;
 using Sirenix.OdinInspector.Editor;
 
+namespace DYM.ToolBox
+{
 public class ImprovedTimelineCheckerWindow : OdinEditorWindow
 {
     [PropertyOrder(0)]
@@ -177,4 +179,5 @@ public class ImprovedTimelineCheckerWindow : OdinEditorWindow
     {
         prefabs.Clear();
     }
+}
 }

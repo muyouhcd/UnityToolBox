@@ -3,6 +3,9 @@ using UnityEditor;
 using System.IO;
 using System.Collections.Generic;
 
+namespace DYM.ToolBox
+{
+
 public class BatchMissingScriptCleaner : EditorWindow
 {
     private string prefabFolderPath = "Assets"; // Ä¬ÈÏÂ·¾¶
@@ -83,4 +86,5 @@ public class BatchMissingScriptCleaner : EditorWindow
 
         return count;
     }
+}
 }

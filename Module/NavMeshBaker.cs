@@ -4,6 +4,9 @@ using UnityEditor;
 using UnityEngine;
 using Unity.AI.Navigation; // 确保导入正确的命名空间
 
+namespace DYM.ToolBox
+{
+
 
 
 public class NavMeshBaker : EditorWindow
@@ -90,4 +93,5 @@ public class NavMeshBaker : EditorWindow
 
 
 
+}
 }

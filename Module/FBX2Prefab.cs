@@ -2,6 +2,9 @@ using UnityEngine;
 using UnityEditor;
 using System.IO;
 
+namespace DYM.ToolBox
+{
+
 public class FBXToPrefabConverterWindow : EditorWindow
 {
     private string fbxFolderPath = "Assets/YourFBXFolder";
@@ -97,4 +100,5 @@ public class FBXToPrefabConverterWindow : EditorWindow
 
         AssetDatabase.Refresh();
     }
+}
 }

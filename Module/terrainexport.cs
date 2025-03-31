@@ -4,6 +4,9 @@ using UnityEditor;
 using UnityEngine;
 using System;
 
+namespace DYM.ToolBox
+{
+
 enum SaveFormat { Triangles, Quads }
 enum SaveResolution { Full, Half, Quarter, Eighth, Sixteenth }
 
@@ -205,4 +208,5 @@ class ExportTerrain : EditorWindow
             EditorUtility.DisplayProgressBar("Saving...", "", Mathf.InverseLerp(0, totalCount, ++tCount));
         }
     }
+}
 }

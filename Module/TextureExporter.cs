@@ -13,6 +13,9 @@ using UnityEditor.SceneManagement;
 using UnityEngine.UI;
 using System.Security.Cryptography;
 
+namespace DYM.ToolBox
+{
+
 
 public class TextureExporter : EditorWindow
 {
@@ -272,4 +275,5 @@ public class TextureExporter : EditorWindow
 
 
 
+}
 }

@@ -11,6 +11,9 @@ using UnityEngine.SceneManagement;
 
 using System.Linq;
 
+namespace DYM.ToolBox
+{
+
 public class FBXChecker : EditorWindow
 {
     private string folderPath = "Assets/ArtResources/Character/Clothing/Upper";
@@ -221,4 +224,5 @@ public class FBXChecker : EditorWindow
 
     
 
+}
 }

@@ -1,6 +1,9 @@
 using UnityEditor;
 using UnityEngine;
 
+namespace DYM.ToolBox
+{
+
 public class RoundPositionEditor : EditorWindow
 {
     [MenuItem("美术工具/地编工具/选取物体位置取整0.25")]
@@ -23,4 +26,5 @@ public class RoundPositionEditor : EditorWindow
     {
         return Mathf.Round(value * 4f) / 4f;
     }
+}
 }

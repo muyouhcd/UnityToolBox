@@ -6,7 +6,6 @@ using UnityEditor;
 using UnityEngine;
 using DYM.ToolBox;
 
-
 namespace DYM.ToolBox
 {
     public class ToolboxManager : EditorWindow
@@ -22,95 +21,10 @@ namespace DYM.ToolBox
             Misc
         }
 
-        //检查工具变量
-        
-        private TabType selectedTab = TabType.Transform;
-        private Vector2 scrollPosition;
-        private GUIStyle headerStyle;
-        private GUIStyle tabStyle;
-        private GUIStyle selectedTabStyle;
-        private Color defaultBackgroundColor;
-
-        // 变换工具变量
-        private float offsetX = 0f;
-        private float offsetY = 0f;
-        private float offsetZ = 0f;
-        private float roundPrecision = 0.25f;
-
-        // 材质工具变量
-        private Material sourceMat;
-        private Material targetMat;
-        private string materialName = "NewMaterial";
-        private string savePath = "";
-        private string shaderName = "";
-
-        // FBX工具变量
-        private string checkDirectory = "";
-        private string sourceFbxDirectory = "";
-        private string outputPrefabDirectory = "";
-        private bool preserveMaterials = true;
-
-        // 资产工具变量
-        private string prefix = "";
-        private string suffix = "";
-        private string renamePattern = "";
-        private int renameStartIndex = 1;
-        private string searchString = "";
-        private string replacementString = "";
-        private string searchPath = "";
-        private bool caseSensitive = false;
-        private int removeCharCount = 0;
-        private string assetPath = "";
-        private string baseName = "Asset";
-
-        // 导航工具变量
-        private float agentRadius = 0.5f;
-        private float agentHeight = 2f;
-        private float maxSlope = 45f;
-        private float stepHeight = 0.4f;
-
-        // 清理工具变量
-        private string cleanupFolderPath = "";
-        private bool cleanUnusedAssets = true;
-        private bool cleanEmptyDirectories = true;
-        private string scriptCheckDirectory = "";
-        private bool includeMetaFiles = true;
-        private bool includeSubfolders = true;
-        private bool deleteEmptyFolders = true;
-
-        // 其他工具变量
-        private GameObject trackPrefab;
-        private float trackLength = 10f;
-        private float trackSpacing = 1f;
-        private UnityEngine.Object timelineAsset;
-
-        // Misc工具变量
-        private string findFileName = "";
-        private string findPath = "";
-        private bool findInScenes = true;
-        private bool findInPrefabs = true;
-        private bool findInAssets = true;
-        private bool exactMatch = true;
-        private string screenshotPath = "";
-        private float screenshotScale = 1f;
-        private bool selectByTag = false;
-        private string selectedTag = "";
-        private bool selectByLayer = false;
-        private int selectedLayer = 0;
-        private bool selectByName = false;
-        private string nameContains = "";
-        private bool selectByComponent = false;
-        private string componentType = "";
-
-        // 导航工具变量
-        private string bookmarkName = "";
-        private List<string> bookmarks = new List<string>();
-
-        [MenuItem("DYM/工具箱 %#t")]  // Ctrl+Alt+T 快捷键
-
+        [MenuItem("美术工具/工具箱")]
         public static void ShowWindow()
         {
-            GetWindow<ToolboxManager>("DYM工具箱");
+            GetWindow<ToolboxManager>("工具箱");
         }
 
         private void OnEnable()

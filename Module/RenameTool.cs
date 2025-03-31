@@ -5,6 +5,9 @@ using UnityEditor;
 using UnityEngine;
 using System;
 
+namespace DYM.ToolBox
+{
+
 
 public class RenamePlus : EditorWindow
 {
@@ -1103,4 +1106,5 @@ public class RenamePlus : EditorWindow
 
 
 
+}
 }

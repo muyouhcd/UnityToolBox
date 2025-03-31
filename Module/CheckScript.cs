@@ -1,6 +1,9 @@
 using UnityEngine;
 using UnityEditor;
 
+namespace DYM.ToolBox
+{
+
 public class MissingScriptChecker : MonoBehaviour
 {
     [MenuItem("Tools/Check Prefab for Missing Scripts")]
@@ -34,4 +37,5 @@ public class MissingScriptChecker : MonoBehaviour
             CheckGameObjectForMissingScripts(child.gameObject);
         }
     }
+}
 }

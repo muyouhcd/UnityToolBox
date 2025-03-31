@@ -13,6 +13,9 @@ using UnityEditor.SceneManagement;
 using UnityEngine.UI;
 using System.Security.Cryptography;
 
+namespace DYM.ToolBox
+{
+
 public class Replacer : EditorWindow
 {
     private Vector2 scrollPosition;
@@ -405,4 +408,5 @@ public class Replacer : EditorWindow
             Undo.RegisterCreatedObjectUndo(newObject, "Replace with Prefab");
         }
     }
+}
 }

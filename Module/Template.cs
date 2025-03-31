@@ -13,6 +13,9 @@ using UnityEditor.SceneManagement;
 using UnityEngine.UI;
 using System.Security.Cryptography;
 
+namespace DYM.ToolBox
+{
+
 public class Template : EditorWindow
 {
     private Vector2 scrollPosition;
@@ -34,4 +37,5 @@ public class Template : EditorWindow
     // {}
 
 
+}
 }

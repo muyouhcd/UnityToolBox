@@ -2,6 +2,9 @@ using UnityEngine;
 using UnityEditor;
 using System.IO;
 
+namespace DYM.ToolBox
+{
+
 public class FBXMaterialGenerator : MonoBehaviour
 {
     [MenuItem("美术工具/生成工具/FBX生成材质球")]
@@ -104,4 +107,5 @@ public class FBXMaterialGenerator : MonoBehaviour
         }
         return texture;
     }
+}
 }

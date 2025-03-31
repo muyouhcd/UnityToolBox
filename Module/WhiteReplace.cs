@@ -2,14 +2,16 @@ using UnityEngine;
 using UnityEditor;
 using System.IO;
 
+namespace DYM.ToolBox
+{
 
-//Ìæ»»Ö¸¶¨Â·¾¶ÏÂprefabÖÐËùÓÐ²ÄÖÊÎªÖ¸¶¨²ÄÖÊ
+//ï¿½æ»»Ö¸ï¿½ï¿½Â·ï¿½ï¿½ï¿½ï¿½prefabï¿½ï¿½ï¿½ï¿½ï¿½Ð²ï¿½ï¿½ï¿½ÎªÖ¸ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 public class ReplaceMaterialsInPrefabs : EditorWindow
 {
-    private string searchInFolder = "Assets/Prefabs"; // Ä¬ÈÏËÑË÷ÎÄ¼þ¼ÐÂ·¾¶
-    private Material newMaterial; // ÓÃ»§Ö¸¶¨µÄÐÂ²ÄÖÊ
+    private string searchInFolder = "Assets/Prefabs"; // Ä¬ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä¼ï¿½ï¿½ï¿½Â·ï¿½ï¿½
+    private Material newMaterial; // ï¿½Ã»ï¿½Ö¸ï¿½ï¿½ï¿½ï¿½ï¿½Â²ï¿½ï¿½ï¿½
 
-    [MenuItem("ÃÀÊõ¹¤¾ß/Ìæ»»¹¤¾ß/Ìæ»»prefabÖÐµÄ²ÄÖÊ")]
+    [MenuItem("ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½/ï¿½æ»»ï¿½ï¿½ï¿½ï¿½/ï¿½æ»»prefabï¿½ÐµÄ²ï¿½ï¿½ï¿½")]
     public static void ShowWindow()
     {
         GetWindow<ReplaceMaterialsInPrefabs>("Replace Prefab Materials");
@@ -24,7 +26,7 @@ public class ReplaceMaterialsInPrefabs : EditorWindow
         searchInFolder = GUILayout.TextField(searchInFolder);
         GUILayout.EndHorizontal();
 
-        // ÐÂ²ÄÖÊµÄÍÏ·Å¿ò
+        // ï¿½Â²ï¿½ï¿½Êµï¿½ï¿½Ï·Å¿ï¿½
         newMaterial = (Material)EditorGUILayout.ObjectField("New Material", newMaterial, typeof(Material), false);
 
         if (GUILayout.Button("Replace Materials"))
@@ -77,4 +79,5 @@ public class ReplaceMaterialsInPrefabs : EditorWindow
             }
         }
     }
+}
 }

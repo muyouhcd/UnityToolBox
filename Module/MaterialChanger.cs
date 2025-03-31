@@ -4,6 +4,9 @@ using UnityEditor;
 using UnityEngine;
 using System.Text.RegularExpressions;
 
+namespace DYM.ToolBox
+{
+
 public class FbxMatChanger : EditorWindow
 {
     private Vector2 scrollPosition;
@@ -325,4 +328,5 @@ public class FbxMatChanger : EditorWindow
         return path;
     }
 
+}
 }
