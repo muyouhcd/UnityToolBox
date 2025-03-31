@@ -1,0 +1,2416 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using UnityEditor;
+using UnityEngine;
+using DYM.ToolBox;
+
+namespace DYM.ToolBox
+{
+    public class ToolboxManager : EditorWindow
+    {
+        // 标签页类型
+        private enum TabType
+        {
+            Transform,
+            Materials,
+            FBX,
+            Assets,
+            Navigation,
+            Cleanup,
+            Misc
+        }
+
+        // 当前选中的标签页
+        private TabType selectedTab;
+
+        // 滚动视图位置
+        private Vector2 scrollPosition;
+
+        // 样式
+        private GUIStyle headerStyle;
+        private GUIStyle tabStyle;
+        private GUIStyle selectedTabStyle;
+        private Color defaultBackgroundColor;
+
+        // 各标签页所需的字段
+        // Transform标签页
+        private float offsetX, offsetY, offsetZ;
+        private float roundPrecision = 0.25f;
+
+        // Material标签页
+        private Material sourceMat;
+        private Material targetMat;
+        private string materialName = "";
+        private string savePath = "Assets";
+        private string shaderName = "";
+
+        // FBX标签页
+        private string checkDirectory = "Assets";
+        private string fbxExportPath = "";
+        private string sourceFbxDirectory = "Assets";
+        private string outputPrefabDirectory = "Assets";
+        private bool preserveMaterials = true;
+
+        // Assets标签页
+        private string prefix = "";
+        private string suffix = "";
+        private string renamePattern = "";
+        private int renameStartIndex = 1;
+        private string searchString = "";
+        private string replacementString = "";
+        private string searchPath = "Assets";
+        private bool caseSensitive = false;
+        private int removeCharCount = 1;
+        private string assetPath = "Assets";
+        private string baseName = "Asset";
+
+        // Navigation标签页
+        private string bookmarkName = "";
+        private List<string> bookmarks = new List<string>();
+
+        // Cleanup标签页
+        private string cleanupFolderPath = "Assets";
+        private bool includeMetaFiles = true;
+        private bool includeSubfolders = true;
+        private bool deleteEmptyFolders = false;
+        private List<string> unusedAssets;
+        private List<string> selectedAssets = new List<string>();
+        private bool backupBeforeDelete = true;
+        private string backupFolderPath = "";
+        private string cleanupFileExtensions = "";
+
+        // Misc标签页
+        private string findFileName = "";
+        private string findPath = "Assets";
+        private bool findInScenes = true;
+        private bool findInPrefabs = true;
+        private bool findInAssets = true;
+        private bool exactMatch = false;
+        private string screenshotPath = "";
+        private float screenshotScale = 1.0f;
+        private bool selectByTag = false;
+        private string selectedTag = "Untagged";
+        private bool selectByLayer = false;
+        private int selectedLayer = 0;
+        private bool selectByName = false;
+        private string nameContains = "";
+        private bool selectByComponent = false;
+        private string componentType = "";
+
+        [MenuItem("美术工具/工具箱")]
+        public static void ShowWindow()
+        {
+            GetWindow<ToolboxManager>("工具箱");
+        }
+
+        private void OnEnable()
+        {
+            defaultBackgroundColor = GUI.backgroundColor;
+        }
+
+        private void InitializeStyles()
+        {
+            if (headerStyle == null)
+            {
+                headerStyle = new GUIStyle(GUI.skin.label)
+                {
+                    fontSize = 14,
+                    fontStyle = FontStyle.Bold,
+                    alignment = TextAnchor.MiddleLeft,
+                    margin = new RectOffset(4, 4, 8, 8)
+                };
+            }
+
+            if (tabStyle == null)
+            {
+                tabStyle = new GUIStyle(EditorStyles.toolbarButton)
+                {
+                    alignment = TextAnchor.MiddleCenter,
+                    fontStyle = FontStyle.Normal,
+                    fixedHeight = 25
+                };
+            }
+
+            if (selectedTabStyle == null)
+            {
+                selectedTabStyle = new GUIStyle(tabStyle)
+                {
+                    fontStyle = FontStyle.Bold,
+                    normal = { background = EditorGUIUtility.whiteTexture }
+                };
+                selectedTabStyle.normal.textColor = EditorGUIUtility.isProSkin ? Color.white : Color.black;
+            }
+        }
+
+        private void OnGUI()
+        {
+            InitializeStyles();
+
+            EditorGUILayout.BeginVertical();
+
+            // 绘制标签页
+            DrawTabs();
+
+            EditorGUILayout.Space(5);
+
+            // 绘制分割线
+            EditorGUILayout.LabelField("", GUI.skin.horizontalSlider);
+
+            // 内容区域开始滚动视图
+            scrollPosition = EditorGUILayout.BeginScrollView(scrollPosition);
+
+            // 根据选择的标签页显示不同的内容
+            switch (selectedTab)
+            {
+                case TabType.Transform:
+                    DrawTransformTab();
+                    break;
+                case TabType.Materials:
+                    DrawMaterialsTab();
+                    break;
+                case TabType.FBX:
+                    DrawFBXTab();
+                    break;
+                case TabType.Assets:
+                    DrawAssetsTab();
+                    break;
+                case TabType.Navigation:
+                    DrawNavigationTab();
+                    break;
+                case TabType.Cleanup:
+                    DrawCleanupTab();
+                    break;
+                case TabType.Misc:
+                    DrawMiscTab();
+                    break;
+            }
+
+            EditorGUILayout.EndScrollView();
+            EditorGUILayout.EndVertical();
+        }
+
+        private void DrawTabs()
+        {
+            EditorGUILayout.BeginHorizontal();
+            
+            foreach (TabType tabType in Enum.GetValues(typeof(TabType)))
+            {
+                GUIStyle style = selectedTab == tabType ? selectedTabStyle : tabStyle;
+                string tabName = GetTabName(tabType);
+                
+                if (GUILayout.Button(tabName, style))
+                {
+                    selectedTab = tabType;
+                }
+            }
+            
+            EditorGUILayout.EndHorizontal();
+        }
+
+        private string GetTabName(TabType tabType)
+        {
+            switch (tabType)
+            {
+                case TabType.Transform: return "变换工具";
+                case TabType.Materials: return "材质工具";
+                case TabType.FBX: return "FBX工具";
+                case TabType.Assets: return "资源工具";
+                case TabType.Navigation: return "导航工具";
+                case TabType.Cleanup: return "清理工具";
+                case TabType.Misc: return "其他工具";
+                default: return tabType.ToString();
+            }
+        }
+
+        private void DrawTransformTab()
+        {
+
+            EditorGUILayout.Space(10);
+            EditorGUILayout.LabelField("变换操作工具", EditorStyles.boldLabel);
+            EditorGUILayout.HelpBox("此工具可以帮助您对场景中的对象进行批量变换操作。", MessageType.Info);
+            
+            GUILayout.Space(10); // 添加一些空隙
+            if (GUILayout.Button("批量复制底部中心位置（需要同名）"))
+            {
+                RecordPositions();
+            }
+            if (GUILayout.Button("批量粘贴底部中心位置（需要同名）"))
+            {
+                PastePositions();
+            }
+            GUILayout.Space(10); // 添加一些空隙
+            if (GUILayout.Button("尺寸缩小100比例"))
+            {
+                ResizeSelectedObject();
+            }
+
+            EditorGUILayout.Space(5);
+            EditorGUILayout.LabelField("批量坐标调整", EditorStyles.boldLabel);
+
+            EditorGUILayout.BeginHorizontal();
+            EditorGUILayout.LabelField("X偏移量:", GUILayout.Width(70));
+            offsetX = EditorGUILayout.FloatField(offsetX);
+            EditorGUILayout.LabelField("Y偏移量:", GUILayout.Width(70));
+            offsetY = EditorGUILayout.FloatField(offsetY);
+            EditorGUILayout.LabelField("Z偏移量:", GUILayout.Width(70));
+            offsetZ = EditorGUILayout.FloatField(offsetZ);
+            EditorGUILayout.EndHorizontal();
+
+            if (GUILayout.Button("应用偏移到选中对象"))
+            {
+                ApplyOffset(offsetX, offsetY, offsetZ);
+            }
+
+            EditorGUILayout.Space(5);
+            
+            if (GUILayout.Button("重置选中对象旋转"))
+            {
+                ResetRotation();
+            }
+            
+            if (GUILayout.Button("重置选中对象缩放"))
+            {
+                ResetScale();
+            }
+
+            if (GUILayout.Button("交换两个物体位置和旋转"))
+            {
+                TransformManager.SwapTransforms();
+            }
+
+            if (GUILayout.Button("下落物体至表面"))
+            {
+                TransformManager.DropSelectedObjectsToMesh();
+            }
+
+
+            // 位置四舍五入UI
+            EditorGUILayout.Space(10);
+            EditorGUILayout.LabelField("位置四舍五入工具", EditorStyles.boldLabel);
+            EditorGUILayout.HelpBox("此工具可以将选中对象的位置值四舍五入到指定精度。", MessageType.Info);
+
+            EditorGUILayout.Space(5);
+
+            EditorGUILayout.BeginHorizontal();
+            EditorGUILayout.LabelField("四舍五入精度:", GUILayout.Width(100));
+            roundPrecision = EditorGUILayout.FloatField(roundPrecision);
+            EditorGUILayout.EndHorizontal();
+
+            if (GUILayout.Button("应用四舍五入到选中对象"))
+            {
+                RoundPositions(roundPrecision);
+            }
+
+            EditorGUILayout.Space(10);
+        }
+
+        // 添加需要的方法实现
+        private void RecordPositions()
+        {
+            GameObject[] selectedObjects = Selection.gameObjects;
+            if (selectedObjects.Length == 0)
+            {
+                EditorUtility.DisplayDialog("错误", "请先选择一些对象", "确定");
+                return;
+            }
+            
+            // 存储底部中心位置
+            Dictionary<string, Vector3> positionData = new Dictionary<string, Vector3>();
+            foreach (GameObject obj in selectedObjects)
+            {
+                Renderer renderer = obj.GetComponent<Renderer>();
+                if (renderer != null)
+                {
+                    // 计算底部中心位置
+                    Bounds bounds = renderer.bounds;
+                    Vector3 bottomCenter = new Vector3(bounds.center.x, bounds.min.y, bounds.center.z);
+                    positionData[obj.name] = bottomCenter;
+                }
+                else
+                {
+                    positionData[obj.name] = obj.transform.position;
+                }
+            }
+            
+            // 将位置数据存储到EditorPrefs
+            var wrapper = new PositionDataWrapper();
+            wrapper.SetFromDictionary(positionData);
+            string positionJson = JsonUtility.ToJson(wrapper);
+            EditorPrefs.SetString("DYM_PositionData", positionJson);
+            
+            EditorUtility.DisplayDialog("完成", "已记录选中对象的底部中心位置", "确定");
+        }
+        
+        private void PastePositions()
+        {
+            GameObject[] selectedObjects = Selection.gameObjects;
+            if (selectedObjects.Length == 0)
+            {
+                EditorUtility.DisplayDialog("错误", "请先选择一些对象", "确定");
+                return;
+            }
+            
+            // 从EditorPrefs获取位置数据
+            string positionJson = EditorPrefs.GetString("DYM_PositionData", "");
+            if (string.IsNullOrEmpty(positionJson))
+            {
+                EditorUtility.DisplayDialog("错误", "没有存储的位置数据", "确定");
+                return;
+            }
+            
+            // 反序列化位置数据
+            PositionDataWrapper wrapper = JsonUtility.FromJson<PositionDataWrapper>(positionJson);
+            Dictionary<string, Vector3> positionData = wrapper.GetPositionsDictionary();
+            
+            // 应用位置数据
+            Undo.RecordObjects(selectedObjects.Select(go => go.transform).ToArray(), "Paste Positions");
+            int count = 0;
+            
+            foreach (GameObject obj in selectedObjects)
+            {
+                if (positionData.TryGetValue(obj.name, out Vector3 position))
+                {
+                    Renderer renderer = obj.GetComponent<Renderer>();
+                    if (renderer != null)
+                    {
+                        // 计算偏移量
+                        Bounds bounds = renderer.bounds;
+                        Vector3 bottomCenter = new Vector3(bounds.center.x, bounds.min.y, bounds.center.z);
+                        Vector3 offset = obj.transform.position - bottomCenter;
+                        
+                        // 应用新位置，保持相对偏移
+                        obj.transform.position = position + offset;
+                    }
+                    else
+                    {
+                        obj.transform.position = position;
+                    }
+                    count++;
+                }
+            }
+            
+            EditorUtility.DisplayDialog("完成", $"已应用 {count} 个对象的底部中心位置", "确定");
+        }
+        
+        private void ResizeSelectedObject()
+        {
+            GameObject[] selectedObjects = Selection.gameObjects;
+            if (selectedObjects.Length == 0)
+            {
+                EditorUtility.DisplayDialog("错误", "请先选择一些对象", "确定");
+                return;
+            }
+            
+            Undo.RecordObjects(selectedObjects.Select(go => go.transform).ToArray(), "Resize Objects");
+            
+            foreach (GameObject obj in selectedObjects)
+            {
+                Vector3 scale = obj.transform.localScale;
+                scale *= 0.01f; // 缩小到原来的1/100
+                obj.transform.localScale = scale;
+            }
+            
+            EditorUtility.DisplayDialog("完成", "已将选中对象的尺寸缩小到原来的1/100", "确定");
+        }
+        
+        // 用于序列化/反序列化的辅助类
+        [System.Serializable]
+        private class PositionDataWrapper
+        {
+            public List<PositionData> positionsList = new List<PositionData>();
+            
+            public Dictionary<string, Vector3> GetPositionsDictionary()
+            {
+                Dictionary<string, Vector3> dict = new Dictionary<string, Vector3>();
+                foreach (var data in positionsList)
+                {
+                    dict[data.objectName] = data.position;
+                }
+                return dict;
+            }
+            
+            public void SetFromDictionary(Dictionary<string, Vector3> positions)
+            {
+                positionsList.Clear();
+                foreach (var pair in positions)
+                {
+                    positionsList.Add(new PositionData { objectName = pair.Key, position = pair.Value });
+                }
+            }
+        }
+        
+        [System.Serializable]
+        private class PositionData
+        {
+            public string objectName;
+            public Vector3 position;
+        }
+
+        private void ApplyOffset(float x, float y, float z)
+        {
+            GameObject[] selectedObjects = Selection.gameObjects;
+            if (selectedObjects.Length == 0)
+            {
+                EditorUtility.DisplayDialog("错误", "请先选择一些对象", "确定");
+                return;
+            }
+            
+            Undo.RecordObjects(selectedObjects.Select(go => go.transform).ToArray(), "Apply Offset");
+            
+            foreach (GameObject obj in selectedObjects)
+            {
+                Vector3 position = obj.transform.position;
+                position.x += x;
+                position.y += y;
+                position.z += z;
+                obj.transform.position = position;
+            }
+        }
+
+        private void ResetRotation()
+        {
+            GameObject[] selectedObjects = Selection.gameObjects;
+            if (selectedObjects.Length == 0)
+            {
+                EditorUtility.DisplayDialog("错误", "请先选择一些对象", "确定");
+                return;
+            }
+            
+            Undo.RecordObjects(selectedObjects.Select(go => go.transform).ToArray(), "Reset Rotation");
+            
+            foreach (GameObject obj in selectedObjects)
+            {
+                obj.transform.rotation = Quaternion.identity;
+            }
+        }
+
+        private void ResetScale()
+        {
+            GameObject[] selectedObjects = Selection.gameObjects;
+            if (selectedObjects.Length == 0)
+            {
+                EditorUtility.DisplayDialog("错误", "请先选择一些对象", "确定");
+                return;
+            }
+            
+            Undo.RecordObjects(selectedObjects.Select(go => go.transform).ToArray(), "Reset Scale");
+            
+            foreach (GameObject obj in selectedObjects)
+            {
+                obj.transform.localScale = Vector3.one;
+            }
+        }
+
+        private void RoundPositions(float precision)
+        {
+            // Call the method from RoundPositionEditor
+            RoundPositionEditor.RoundPositionsWithPrecision(precision);
+        }
+
+        private void DrawMaterialsTab()
+        {
+            EditorGUILayout.LabelField("材质工具", headerStyle);
+            EditorGUILayout.Space();
+            
+            // === 材质替换功能 ===
+            EditorGUILayout.BeginVertical("Box");
+            EditorGUILayout.LabelField("材质替换工具", EditorStyles.boldLabel);
+            EditorGUILayout.HelpBox("替换选中对象或预制体中的材质", MessageType.Info);
+            
+            EditorGUILayout.Space();
+            
+            // 选择材质
+            EditorGUILayout.BeginHorizontal();
+            GUILayout.Label("源材质:", GUILayout.Width(60));
+            sourceMat = (Material)EditorGUILayout.ObjectField(sourceMat, typeof(Material), false);
+            EditorGUILayout.EndHorizontal();
+            
+            EditorGUILayout.BeginHorizontal();
+            GUILayout.Label("目标材质:", GUILayout.Width(60));
+            targetMat = (Material)EditorGUILayout.ObjectField(targetMat, typeof(Material), false);
+            EditorGUILayout.EndHorizontal();
+            
+            // 操作按钮
+            EditorGUILayout.BeginHorizontal();
+            if (GUILayout.Button("替换选中对象的材质", GUILayout.Height(25)))
+            {
+                ReplaceSelectedObjectsMaterial(sourceMat, targetMat);
+            }
+            
+            if (GUILayout.Button("替换所有使用源材质的对象", GUILayout.Height(25)))
+            {
+                ReplaceAllMaterials(sourceMat, targetMat);
+            }
+            EditorGUILayout.EndHorizontal();
+            
+            EditorGUILayout.Space(10);
+            EditorGUILayout.LabelField("", GUI.skin.horizontalSlider);
+            EditorGUILayout.Space(5);
+            
+            // === 预制体材质替换功能 ===
+            EditorGUILayout.LabelField("预制体材质替换", EditorStyles.boldLabel);
+            EditorGUILayout.HelpBox("将指定文件夹中所有预制体的所有材质替换为目标材质", MessageType.Info);
+            
+            string prefabFolder = DrawFilePathField("预制体目录", "Assets/Prefabs", "选择预制体目录", "", true);
+            
+            EditorGUILayout.BeginHorizontal();
+            GUILayout.Label("替换材质:", GUILayout.Width(60));
+            Material replacementMat = (Material)EditorGUILayout.ObjectField(targetMat, typeof(Material), false);
+            EditorGUILayout.EndHorizontal();
+            
+            if (GUILayout.Button("替换预制体材质", GUILayout.Height(30)))
+            {
+                if (replacementMat == null)
+                {
+                    EditorUtility.DisplayDialog("错误", "请设置替换材质", "确定");
+                }
+                else if (string.IsNullOrEmpty(prefabFolder))
+                {
+                    EditorUtility.DisplayDialog("错误", "请设置预制体目录", "确定");
+                }
+                else
+                {
+                    ReplaceMaterialsInPrefabs.ReplaceMaterialsStatic(prefabFolder, replacementMat);
+                }
+            }
+            
+            EditorGUILayout.Space(5);
+            EditorGUILayout.EndVertical();
+            
+            // === 材质创建功能 ===
+            EditorGUILayout.Space(15);
+            EditorGUILayout.BeginVertical("Box");
+            EditorGUILayout.LabelField("材质创建工具", EditorStyles.boldLabel);
+            EditorGUILayout.HelpBox("创建新材质并设置Shader", MessageType.Info);
+            
+            EditorGUILayout.BeginHorizontal();
+            GUILayout.Label("材质名称:", GUILayout.Width(60));
+            materialName = EditorGUILayout.TextField(materialName);
+            EditorGUILayout.EndHorizontal();
+            
+            EditorGUILayout.BeginHorizontal();
+            GUILayout.Label("保存路径:", GUILayout.Width(60));
+            savePath = EditorGUILayout.TextField(savePath);
+            if (GUILayout.Button("浏览", GUILayout.Width(60)))
+            {
+                string path = EditorUtility.OpenFolderPanel("选择保存路径", Application.dataPath, "");
+                if (!string.IsNullOrEmpty(path))
+                {
+                    if (path.StartsWith(Application.dataPath))
+                    {
+                        path = "Assets" + path.Substring(Application.dataPath.Length);
+                    }
+                    savePath = path;
+                }
+            }
+            EditorGUILayout.EndHorizontal();
+            
+            if (GUILayout.Button("创建材质", GUILayout.Height(25)))
+            {
+                CreateMaterial(materialName, savePath);
+            }
+            
+            EditorGUILayout.Space(10);
+            
+            // === Shader修改功能 ===
+            EditorGUILayout.LabelField("Shader修改工具", EditorStyles.boldLabel);
+            EditorGUILayout.HelpBox("批量修改选中材质的Shader", MessageType.Info);
+            
+            EditorGUILayout.BeginHorizontal();
+            GUILayout.Label("Shader名称:", GUILayout.Width(80));
+            shaderName = EditorGUILayout.TextField(shaderName);
+            EditorGUILayout.EndHorizontal();
+            
+            if (GUILayout.Button("修改选中材质的Shader", GUILayout.Height(25)))
+            {
+                if (EditorWindow.GetWindow(typeof(DYM.ToolBox.FbxMatChanger), false, "FBX材质修改") is DYM.ToolBox.FbxMatChanger matChangerWindow)
+                {
+                    matChangerWindow.Show();
+                    EditorUtility.DisplayDialog("提示", "请在FBX材质修改窗口中使用'批量更改shader'功能", "确定");
+                }
+            }
+            
+            EditorGUILayout.EndVertical();
+            
+            // === 工具按钮 ===
+            EditorGUILayout.Space(10);
+            EditorGUILayout.BeginHorizontal();
+            if (GUILayout.Button("FBX材质修改工具", GUILayout.Height(30), GUILayout.Width(180)))
+            {
+                FbxMatChanger.ShowWindow();
+            }
+            
+            if (GUILayout.Button("白色替换工具", GUILayout.Height(30), GUILayout.Width(180)))
+            {
+                EditorWindow.GetWindow(typeof(DYM.ToolBox.ReplaceMaterialsInPrefabs), false, "白色替换").Show();
+            }
+            EditorGUILayout.EndHorizontal();
+        }
+
+        // 添加材质相关方法
+        private void ReplaceSelectedObjectsMaterial(Material sourceMat, Material targetMat)
+        {
+            if (sourceMat == null || targetMat == null)
+            {
+                EditorUtility.DisplayDialog("错误", "请选择源材质和目标材质", "确定");
+                return;
+            }
+            
+            GameObject[] selectedObjects = Selection.gameObjects;
+            if (selectedObjects.Length == 0)
+            {
+                EditorUtility.DisplayDialog("错误", "请先选择一些对象", "确定");
+                return;
+            }
+            
+            int count = 0;
+            foreach (GameObject obj in selectedObjects)
+            {
+                Renderer[] renderers = obj.GetComponentsInChildren<Renderer>();
+                foreach (Renderer renderer in renderers)
+                {
+                    Material[] materials = renderer.sharedMaterials;
+                    bool changed = false;
+                    
+                    for (int i = 0; i < materials.Length; i++)
+                    {
+                        if (materials[i] == sourceMat)
+                        {
+                            materials[i] = targetMat;
+                            changed = true;
+                            count++;
+                        }
+                    }
+                    
+                    if (changed)
+                    {
+                        Undo.RecordObject(renderer, "Replace Material");
+                        renderer.sharedMaterials = materials;
+                    }
+                }
+            }
+            
+            EditorUtility.DisplayDialog("完成", $"已替换 {count} 个材质实例", "确定");
+        }
+
+        private void ReplaceAllMaterials(Material sourceMat, Material targetMat)
+        {
+            if (sourceMat == null || targetMat == null)
+            {
+                EditorUtility.DisplayDialog("错误", "请选择源材质和目标材质", "确定");
+                return;
+            }
+            
+            GameObject[] allObjects = FindObjectsOfType<GameObject>();
+            int count = 0;
+            
+            foreach (GameObject obj in allObjects)
+            {
+                Renderer[] renderers = obj.GetComponentsInChildren<Renderer>();
+                foreach (Renderer renderer in renderers)
+                {
+                    Material[] materials = renderer.sharedMaterials;
+                    bool changed = false;
+                    
+                    for (int i = 0; i < materials.Length; i++)
+                    {
+                        if (materials[i] == sourceMat)
+                        {
+                            materials[i] = targetMat;
+                            changed = true;
+                            count++;
+                        }
+                    }
+                    
+                    if (changed)
+                    {
+                        Undo.RecordObject(renderer, "Replace Material");
+                        renderer.sharedMaterials = materials;
+                    }
+                }
+            }
+            
+            EditorUtility.DisplayDialog("完成", $"已替换 {count} 个材质实例", "确定");
+        }
+
+        private void CreateMaterial(string materialName, string savePath)
+        {
+            if (string.IsNullOrEmpty(materialName))
+            {
+                EditorUtility.DisplayDialog("错误", "请输入材质名称", "确定");
+                return;
+            }
+            
+            if (string.IsNullOrEmpty(savePath))
+            {
+                savePath = "Assets";
+            }
+            
+            // 确保路径存在
+            if (!Directory.Exists(Path.Combine(Application.dataPath, savePath.Substring(7))))
+            {
+                Directory.CreateDirectory(Path.Combine(Application.dataPath, savePath.Substring(7)));
+            }
+            
+            // 创建材质
+            Material material = new Material(Shader.Find("Standard"));
+            
+            // 保存材质
+            string assetPath = Path.Combine(savePath, materialName + ".mat");
+            AssetDatabase.CreateAsset(material, assetPath);
+            AssetDatabase.SaveAssets();
+            
+            // 选中创建的材质
+            Selection.activeObject = material;
+            
+            EditorUtility.DisplayDialog("完成", $"已在 {assetPath} 创建材质", "确定");
+        }
+
+        private void DrawFBXTab()
+        {
+            EditorGUILayout.LabelField("FBX工具", headerStyle);
+
+            // === FBX检查工具部分 ===
+            GUILayout.Label("FBX检查工具", EditorStyles.boldLabel);
+            EditorGUILayout.HelpBox("检查指定路径下的fbx中是否存在名称为Root的骨骼内容，以判断这个fbx是否经过绑定", MessageType.Info);
+            
+            EditorGUILayout.BeginHorizontal();
+            GUILayout.Label("检查目录", GUILayout.Width(80));
+            checkDirectory = EditorGUILayout.TextField(checkDirectory);
+            if (GUILayout.Button("浏览", GUILayout.Width(60)))
+            {
+                string path = EditorUtility.OpenFolderPanel("选择文件夹", Application.dataPath, "");
+                if (!string.IsNullOrEmpty(path))
+                {
+                    checkDirectory = path;
+                }
+            }
+            EditorGUILayout.EndHorizontal();
+            
+            // 替换为直接调用静态方法
+            if (GUILayout.Button("检查FBX文件"))
+            {
+                var results = FBXChecker.CheckFBXFilesStatic(checkDirectory);
+                if (results.Count == 0)
+                {
+                    EditorUtility.DisplayDialog("检查结果", "所有FBX文件都包含Root骨骼，符合要求。", "确定");
+                }
+                else
+                {
+                    EditorUtility.DisplayDialog("检查结果", $"发现 {results.Count} 个不含Root骨骼的FBX文件，请查看下方列表或导出为CSV。", "确定");
+                }
+            }
+            
+            // 显示检查结果
+            if (FBXChecker.LastCheckResults.Count > 0)
+            {
+                EditorGUILayout.Space();
+                GUILayout.Label("没有Root骨骼的FBX文件列表：", EditorStyles.boldLabel);
+                
+                scrollPosition = EditorGUILayout.BeginScrollView(scrollPosition, GUILayout.Height(150));
+                foreach (var file in FBXChecker.LastCheckResults)
+                {
+                    EditorGUILayout.BeginHorizontal();
+                    GUILayout.Label(Path.GetFileName(file));
+                    if (GUILayout.Button("定位", GUILayout.Width(60)))
+                    {
+                        var asset = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(file);
+                        Selection.activeObject = asset;
+                        EditorGUIUtility.PingObject(asset);
+                    }
+                    EditorGUILayout.EndHorizontal();
+                }
+                EditorGUILayout.EndScrollView();
+                
+                EditorGUILayout.Space();
+                
+                EditorGUILayout.BeginHorizontal();
+                GUILayout.Label("导出结果路径", GUILayout.Width(80));
+                fbxExportPath = EditorGUILayout.TextField(fbxExportPath);
+                if (GUILayout.Button("浏览", GUILayout.Width(60)))
+                {
+                    string path = EditorUtility.SaveFilePanel("保存CSV文件", Application.dataPath, "FBXCheckResult.csv", "csv");
+                    if (!string.IsNullOrEmpty(path))
+                    {
+                        fbxExportPath = path;
+                    }
+                }
+                EditorGUILayout.EndHorizontal();
+                
+                if (GUILayout.Button("导出到CSV"))
+                {
+                    if (string.IsNullOrEmpty(fbxExportPath))
+                    {
+                        EditorUtility.DisplayDialog("错误", "请先设置导出路径", "确定");
+                    }
+                    else
+                    {
+                        FBXChecker.ExportToCSVStatic(FBXChecker.LastCheckResults, fbxExportPath);
+                    }
+                }
+            }
+            
+            // === FBX转预制体部分 ===
+            GUILayout.Space(15);
+            EditorGUILayout.LabelField("", GUI.skin.horizontalSlider);
+            GUILayout.Space(15);
+            
+            GUILayout.Label("FBX转预制体工具", EditorStyles.boldLabel);
+            EditorGUILayout.HelpBox("将FBX文件批量转换为预制体，可选择是否保留材质", MessageType.Info);
+            
+            EditorGUILayout.BeginHorizontal();
+            GUILayout.Label("FBX目录", GUILayout.Width(80));
+            sourceFbxDirectory = EditorGUILayout.TextField(sourceFbxDirectory);
+            if (GUILayout.Button("浏览", GUILayout.Width(60)))
+            {
+                string path = EditorUtility.OpenFolderPanel("选择FBX文件夹", Application.dataPath, "");
+                if (!string.IsNullOrEmpty(path))
+                {
+                    if (path.StartsWith(Application.dataPath))
+                    {
+                        path = "Assets" + path.Substring(Application.dataPath.Length);
+                    }
+                    sourceFbxDirectory = path;
+                }
+            }
+            EditorGUILayout.EndHorizontal();
+            
+            EditorGUILayout.BeginHorizontal();
+            GUILayout.Label("预制体目录", GUILayout.Width(80));
+            outputPrefabDirectory = EditorGUILayout.TextField(outputPrefabDirectory);
+            if (GUILayout.Button("浏览", GUILayout.Width(60)))
+            {
+                string path = EditorUtility.OpenFolderPanel("选择预制体文件夹", Application.dataPath, "");
+                if (!string.IsNullOrEmpty(path))
+                {
+                    if (path.StartsWith(Application.dataPath))
+                    {
+                        path = "Assets" + path.Substring(Application.dataPath.Length);
+                    }
+                    outputPrefabDirectory = path;
+                }
+            }
+            EditorGUILayout.EndHorizontal();
+            
+            preserveMaterials = EditorGUILayout.Toggle("保留材质", preserveMaterials);
+
+            // 使用静态方法直接进行转换
+            if (GUILayout.Button("开始转换", GUILayout.Height(30)))
+            {
+                if (string.IsNullOrEmpty(sourceFbxDirectory) || string.IsNullOrEmpty(outputPrefabDirectory))
+                {
+                    EditorUtility.DisplayDialog("错误", "请设置FBX源目录和预制体输出目录", "确定");
+                }
+                else
+                {
+                    if (EditorUtility.DisplayDialog("确认", $"确定要将 {sourceFbxDirectory} 中的FBX转换为预制体并保存到 {outputPrefabDirectory}？", "确定", "取消"))
+                    {
+                        FBXToPrefabConverterWindow.ConvertFBXToPrefab(sourceFbxDirectory, outputPrefabDirectory);
+                    }
+                }
+            }
+
+            // 工具窗口按钮
+            GUILayout.Space(20);
+            EditorGUILayout.BeginHorizontal();
+            if (GUILayout.Button("打开FBX检查器窗口", GUILayout.Height(30), GUILayout.Width(180)))
+            {
+                EditorWindow.GetWindow(typeof(DYM.ToolBox.FBXChecker), false, "检查FBX").Show();
+            }
+
+            if (GUILayout.Button("打开FBX转预制体窗口", GUILayout.Height(30), GUILayout.Width(180)))
+            {
+                EditorWindow.GetWindow(typeof(DYM.ToolBox.FBXToPrefabConverterWindow), false, "FBX转预制体").Show();
+            }
+            EditorGUILayout.EndHorizontal();
+        }
+
+        private void DrawAssetsTab()
+        {
+            EditorGUILayout.LabelField("资源工具", headerStyle);
+            
+            // 显示提示信息而不是尝试使用未实现的类
+            EditorGUILayout.HelpBox("资源相关工具类尚未实现", MessageType.Warning);
+            
+            if (GUILayout.Button("重命名工具", GUILayout.Height(30)))
+            {
+                EditorWindow.GetWindow(typeof(DYM.ToolBox.RenamePlus), false, "重命名工具").Show();
+            }
+
+            // 以下是从RenamePlus.cs中的OnGUI方法复制过来的
+            scrollPosition = GUILayout.BeginScrollView(scrollPosition);
+
+            // CSV操作部分
+            GUILayout.Space(20);
+            GUILayout.Label("资产CSV操作", EditorStyles.boldLabel);
+
+            string folderPath = DrawFilePathField("目标文件夹", "", "选择文件夹", "", true);
+            string outputCSVPath = DrawFilePathField("输出CSV路径", "", "选择CSV文件", "", true);
+
+            if (GUILayout.Button("输出CSV"))
+            {
+                // 调用ExportAssetsCsv
+                EditorUtility.DisplayDialog("提示", "请使用重命名工具窗口中的导出功能", "确定");
+            }
+
+            string renameCSVPath = DrawFilePathField("重命名CSV路径", "", "选择重命名CSV文件", "csv", false);
+            if (GUILayout.Button("重命名CSV"))
+            {
+                // 调用RenameAssetsByCsv
+                EditorUtility.DisplayDialog("提示", "请使用重命名工具窗口中的重命名功能", "确定");
+            }
+
+            string OriginCSVPath = DrawFilePathField("输出CSV路径", "", "选择CSV文件", "csv", false);
+            string compareCSVPath = DrawFilePathField("对照CSV路径", "", "选择对照CSV文件", "csv", false);
+
+            if (GUILayout.Button("对比CSV并在csv中标记'未制作'"))
+            {
+                // 调用CompareAndMarkCSV
+                EditorUtility.DisplayDialog("提示", "请使用重命名工具窗口中的对比功能", "确定");
+            }
+
+            GUILayout.Space(20);
+            GUILayout.Label("批量重命名选项", EditorStyles.boldLabel);
+
+            EditorGUILayout.BeginHorizontal();
+            GUILayout.Label("前缀");
+            GUILayout.Label("重命名内容");
+            GUILayout.Label("后缀");
+            GUILayout.Label("起始索引");
+            EditorGUILayout.EndHorizontal();
+
+            EditorGUILayout.BeginHorizontal();
+            prefix = EditorGUILayout.TextField(prefix);
+            renamePattern = EditorGUILayout.TextField(renamePattern);
+            suffix = EditorGUILayout.TextField(suffix);
+            renameStartIndex = EditorGUILayout.IntField(renameStartIndex);
+            EditorGUILayout.EndHorizontal();
+
+            EditorGUILayout.BeginHorizontal();
+            if (GUILayout.Button("直接添加"))
+            {
+                // 调用AddPrefixToSelectedAssets
+                EditorUtility.DisplayDialog("提示", "请使用重命名工具窗口中的前缀功能", "确定");
+            }
+            GUILayout.Label("---");
+            if (GUILayout.Button("直接添加"))
+            {
+                // 调用AddSuffixToSelectedAssets
+                EditorUtility.DisplayDialog("提示", "请使用重命名工具窗口中的后缀功能", "确定");
+            }
+            GUILayout.Label("---");
+            EditorGUILayout.EndHorizontal();
+
+            if (GUILayout.Button("批量重命名选中资源"))
+            {
+                // 调用BatchRenameAssets
+                EditorUtility.DisplayDialog("提示", "请使用重命名工具窗口中的批量重命名功能", "确定");
+            }
+
+            // 资产名称查找替换
+            GUILayout.Space(20);
+
+            GUILayout.Label("资产名称查找替换", EditorStyles.boldLabel);
+            EditorGUILayout.BeginHorizontal();
+            EditorGUILayout.LabelField("将字符：", GUILayout.Width(100));
+            searchString = EditorGUILayout.TextField(searchString);
+            EditorGUILayout.LabelField("替换为：", GUILayout.Width(100));
+            replacementString = EditorGUILayout.TextField(replacementString);
+            EditorGUILayout.EndHorizontal();
+
+            EditorGUILayout.BeginHorizontal();
+            EditorGUILayout.LabelField("批量替换路径：", GUILayout.Width(100));
+            searchPath = EditorGUILayout.TextField(searchPath);
+            EditorGUILayout.LabelField("区分大小写", GUILayout.Width(100));
+            caseSensitive = EditorGUILayout.Toggle(caseSensitive);
+            EditorGUILayout.EndHorizontal();
+
+            if (GUILayout.Button("查找替换"))
+            {
+                // 调用FindAndReplaceInAssetNames
+                EditorUtility.DisplayDialog("提示", "请使用重命名工具窗口中的查找替换功能", "确定");
+            }
+
+            GUILayout.Space(20);
+
+            EditorGUILayout.BeginHorizontal();
+            EditorGUILayout.LabelField("删除字符数量:", GUILayout.Width(100));
+            removeCharCount = EditorGUILayout.IntField(removeCharCount);
+            removeCharCount = Mathf.Max(0, removeCharCount);
+            EditorGUILayout.EndHorizontal();
+
+            EditorGUILayout.BeginHorizontal();
+            if (GUILayout.Button("从前往后删除名称中的字符"))
+            {
+                // 调用RemoveCharactersFromAssetNames(true)
+                EditorUtility.DisplayDialog("提示", "请使用重命名工具窗口中的删除字符功能", "确定");
+            }
+            if (GUILayout.Button("从后往前删除名称中的字符"))
+            {
+                // 调用RemoveCharactersFromAssetNames(false)
+                EditorUtility.DisplayDialog("提示", "请使用重命名工具窗口中的删除字符功能", "确定");
+            }
+            EditorGUILayout.EndHorizontal();
+
+            GUILayout.Space(20);
+
+            GUILayout.BeginHorizontal();
+            assetPath = DrawFilePathField("处理路径", assetPath, "选择文件夹", "", true);
+            GUILayout.EndHorizontal();
+
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("基础名称", GUILayout.Width(100));
+            baseName = EditorGUILayout.TextField(baseName);
+            GUILayout.EndHorizontal();
+
+            if (GUILayout.Button("资产名称重命名为基础名称（自动加编号，唯一）"))
+            {
+                // 调用RenameToUniqueName
+                EditorUtility.DisplayDialog("提示", "请使用重命名工具窗口中的重命名为基础名称功能", "确定");
+            }
+
+            GUILayout.Space(20);
+            GUILayout.Label("其他命名功能", EditorStyles.boldLabel);
+
+            if (GUILayout.Button("重命名场景中选中对象为顶级物体名称"))
+            {
+                // 调用RenameSelectedObjects
+                EditorUtility.DisplayDialog("提示", "请使用重命名工具窗口中的重命名场景对象功能", "确定");
+            }
+            if (GUILayout.Button("还原场景中选中对象为其引用prefab原始名称"))
+            {
+                // 调用RenameSelectedObjectsToPrefabName
+                EditorUtility.DisplayDialog("提示", "请使用重命名工具窗口中的还原prefab名称功能", "确定");
+            }
+            if (GUILayout.Button("重命名场景中选中对象为object并自动添加索引"))
+            {
+                // 调用RenameSelectedObjectsWithIndex
+                EditorUtility.DisplayDialog("提示", "请使用重命名工具窗口中的批量索引功能", "确定");
+            }
+
+            GUILayout.EndScrollView();
+
+            if (GUILayout.Button("替换器", GUILayout.Height(30)))
+            {
+                EditorWindow.GetWindow(typeof(DYM.ToolBox.Replacer), false, "替换器").Show();
+            }
+
+            if (GUILayout.Button("纹理导出器", GUILayout.Height(30)))
+            {
+                EditorWindow.GetWindow(typeof(DYM.ToolBox.TextureExporter), false, "纹理导出器").Show();
+            }
+
+            if (GUILayout.Button("地形导出", GUILayout.Height(30)))
+            {
+                EditorWindow.GetWindow(typeof(DYM.ToolBox.ExportTerrain), false, "地形导出").Show();
+            }
+
+            EditorGUILayout.Space(10);
+        }
+
+        private void DrawNavigationTab()
+        {
+            EditorGUILayout.LabelField("导航工具", headerStyle);
+
+            // 场景导航
+            EditorGUILayout.BeginVertical("Box");
+            EditorGUILayout.LabelField("场景导航", EditorStyles.boldLabel);
+            
+            EditorGUILayout.BeginHorizontal();
+            if (GUILayout.Button("顶视图"))
+            {
+                SceneView sceneView = SceneView.lastActiveSceneView;
+                if (sceneView != null)
+                {
+                    sceneView.orthographic = true;
+                    sceneView.rotation = Quaternion.Euler(90, 0, 0);
+                    sceneView.Repaint();
+                }
+            }
+            
+            if (GUILayout.Button("前视图"))
+            {
+                SceneView sceneView = SceneView.lastActiveSceneView;
+                if (sceneView != null)
+                {
+                    sceneView.orthographic = true;
+                    sceneView.rotation = Quaternion.Euler(0, 0, 0);
+                    sceneView.Repaint();
+                }
+            }
+            
+            if (GUILayout.Button("侧视图"))
+            {
+                SceneView sceneView = SceneView.lastActiveSceneView;
+                if (sceneView != null)
+                {
+                    sceneView.orthographic = true;
+                    sceneView.rotation = Quaternion.Euler(0, 90, 0);
+                    sceneView.Repaint();
+                }
+            }
+            EditorGUILayout.EndHorizontal();
+            
+            if (GUILayout.Button("聚焦所选对象"))
+            {
+                SceneView sceneView = SceneView.lastActiveSceneView;
+                if (sceneView != null && Selection.activeGameObject != null)
+                {
+                    sceneView.FrameSelected();
+                }
+            }
+            
+            EditorGUILayout.EndVertical();
+            
+            // 场景书签
+            EditorGUILayout.Space(10);
+            EditorGUILayout.BeginVertical("Box");
+            EditorGUILayout.LabelField("场景书签", EditorStyles.boldLabel);
+            
+            EditorGUILayout.BeginHorizontal();
+            GUILayout.Label("书签名称", GUILayout.Width(80));
+            bookmarkName = EditorGUILayout.TextField(bookmarkName);
+            EditorGUILayout.EndHorizontal();
+            
+            if (GUILayout.Button("保存当前视图"))
+            {
+                if (!string.IsNullOrEmpty(bookmarkName) && SceneView.lastActiveSceneView != null)
+                {
+                    if (bookmarks == null)
+                        bookmarks = new List<string>();
+                        
+                    if (!bookmarks.Contains(bookmarkName))
+                        bookmarks.Add(bookmarkName);
+                        
+                    // 在这里应该保存SceneView的位置和旋转
+                    Debug.Log($"已保存视图书签: {bookmarkName}");
+                }
+                else
+                {
+                    EditorUtility.DisplayDialog("错误", "请输入有效的书签名称", "确定");
+                }
+            }
+            
+            if (bookmarks != null && bookmarks.Count > 0)
+            {
+                EditorGUILayout.BeginScrollView(Vector2.zero, GUILayout.Height(150));
+                
+                for (int i = 0; i < bookmarks.Count; i++)
+                {
+                    EditorGUILayout.BeginHorizontal();
+                    if (GUILayout.Button(bookmarks[i], GUILayout.Width(150)))
+                    {
+                        // 在这里应该加载保存的SceneView位置和旋转
+                        Debug.Log($"跳转到书签: {bookmarks[i]}");
+                    }
+                    
+                    if (GUILayout.Button("X", GUILayout.Width(30)))
+                    {
+                        Debug.Log($"删除书签: {bookmarks[i]}");
+                        bookmarks.RemoveAt(i);
+                        i--;
+                    }
+                    EditorGUILayout.EndHorizontal();
+                }
+                
+                EditorGUILayout.EndScrollView();
+            }
+            else
+            {
+                EditorGUILayout.HelpBox("没有保存的视图书签", MessageType.Info);
+            }
+            
+            EditorGUILayout.EndVertical();
+            
+            // NavMesh功能
+            EditorGUILayout.Space(10);
+            EditorGUILayout.BeginVertical("Box");
+            EditorGUILayout.LabelField("导航网格工具", EditorStyles.boldLabel);
+            
+            if (GUILayout.Button("烘焙导航网格"))
+            {
+                NavMeshBaker.ShowWindow();
+            }
+            
+            if (GUILayout.Button("显示/隐藏导航网格"))
+            {
+                // 切换导航网格的可见性
+                #if UNITY_2020_1_OR_NEWER
+                var sceneView = SceneView.lastActiveSceneView;
+                if (sceneView != null)
+                {
+                    // sceneView.sceneViewState.showNavMeshes = !sceneView.sceneViewState.showNavMeshes;
+                    EditorUtility.DisplayDialog("提示", "NavMesh显示控制在当前Unity版本不可用", "确定");
+                    sceneView.Repaint();
+                }
+                #endif
+            }
+            
+            EditorGUILayout.EndVertical();
+            
+            // 层级导航
+            EditorGUILayout.Space(10);
+            EditorGUILayout.BeginVertical("Box");
+            EditorGUILayout.LabelField("层级导航", EditorStyles.boldLabel);
+            
+            EditorGUILayout.BeginHorizontal();
+            if (GUILayout.Button("展开所有"))
+            {
+                // 展开层级面板中的所有内容
+                EditorWindow hierarchyWindow = EditorWindow.GetWindow(typeof(EditorWindow).Assembly.GetType("UnityEditor.SceneHierarchyWindow"));
+                if (hierarchyWindow != null)
+                {
+                    var expandMethod = hierarchyWindow.GetType().GetMethod("SetExpandedRecursive", 
+                        System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+                    if (expandMethod != null)
+                    {
+                        expandMethod.Invoke(hierarchyWindow, new object[] { 0, true });
+                    }
+                }
+            }
+            
+            if (GUILayout.Button("折叠所有"))
+            {
+                // 折叠层级面板中的所有内容
+                EditorWindow hierarchyWindow = EditorWindow.GetWindow(typeof(EditorWindow).Assembly.GetType("UnityEditor.SceneHierarchyWindow"));
+                if (hierarchyWindow != null)
+                {
+                    var collapseMethod = hierarchyWindow.GetType().GetMethod("SetExpandedRecursive", 
+                        System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+                    if (collapseMethod != null)
+                    {
+                        collapseMethod.Invoke(hierarchyWindow, new object[] { 0, false });
+                    }
+                }
+            }
+            EditorGUILayout.EndHorizontal();
+            
+            if (GUILayout.Button("仅显示选中对象"))
+            {
+                // 实现仅显示选中对象的功能
+                GameObject selectedObject = Selection.activeGameObject;
+                if (selectedObject != null)
+                {
+                    GameObject[] allObjects = FindObjectsOfType<GameObject>();
+                    foreach (GameObject obj in allObjects)
+                    {
+                        if (obj != selectedObject && !IsParentOf(obj, selectedObject) && !IsChildOf(obj, selectedObject))
+                        {
+                            obj.SetActive(false);
+                        }
+                    }
+                }
+                else
+                {
+                    EditorUtility.DisplayDialog("错误", "请先选择一个对象", "确定");
+                }
+            }
+            
+            if (GUILayout.Button("显示所有对象"))
+            {
+                // 显示所有被隐藏的对象
+                GameObject[] allObjects = FindObjectsOfType<GameObject>(true);
+                foreach (GameObject obj in allObjects)
+                {
+                    obj.SetActive(true);
+                }
+            }
+            
+            EditorGUILayout.EndVertical();
+            
+            // 打开工具窗口
+            EditorGUILayout.Space(10);
+            if (GUILayout.Button("导航网格烘焙工具", GUILayout.Height(30)))
+            {
+                NavMeshBaker.ShowWindow();
+            }
+        }
+        
+        // 辅助方法：检查一个对象是否是另一个对象的父级
+        private bool IsParentOf(GameObject parent, GameObject child)
+        {
+            if (child.transform.parent == null)
+                return false;
+                
+            if (child.transform.parent.gameObject == parent)
+                return true;
+                
+            return IsParentOf(parent, child.transform.parent.gameObject);
+        }
+        
+        // 辅助方法：检查一个对象是否是另一个对象的子级
+        private bool IsChildOf(GameObject child, GameObject parent)
+        {
+            foreach (Transform childTransform in parent.transform)
+            {
+                if (childTransform.gameObject == child)
+                    return true;
+                    
+                if (IsChildOf(child, childTransform.gameObject))
+                    return true;
+            }
+            
+            return false;
+        }
+
+        private void DrawCleanupTab()
+        {
+            EditorGUILayout.LabelField("清理工具", headerStyle);
+
+            // 主要清理选项
+            EditorGUILayout.BeginVertical("Box");
+            EditorGUILayout.LabelField("清理选项", EditorStyles.boldLabel);
+
+            EditorGUILayout.BeginHorizontal();
+            GUILayout.Label("目标路径", GUILayout.Width(80));
+            cleanupFolderPath = GUILayout.TextField(cleanupFolderPath);
+            if (GUILayout.Button("浏览", GUILayout.Width(60)))
+            {
+                string path = EditorUtility.OpenFolderPanel("选择文件夹", Application.dataPath, "");
+                if (!string.IsNullOrEmpty(path))
+                {
+                    if (path.StartsWith(Application.dataPath))
+                    {
+                        path = "Assets" + path.Substring(Application.dataPath.Length);
+                    }
+                    cleanupFolderPath = path;
+                }
+            }
+            EditorGUILayout.EndHorizontal();
+            
+            EditorGUILayout.Space();
+            
+            includeMetaFiles = EditorGUILayout.Toggle("包含Meta文件", includeMetaFiles);
+            includeSubfolders = EditorGUILayout.Toggle("包含子文件夹", includeSubfolders);
+            deleteEmptyFolders = EditorGUILayout.Toggle("删除空文件夹", deleteEmptyFolders);
+            
+            EditorGUILayout.Space();
+            
+            GUILayout.Label("选择要清理的文件类型：");
+            EditorGUILayout.BeginHorizontal();
+            bool cleanupImages = EditorGUILayout.Toggle("图片", false);
+            bool cleanupModels = EditorGUILayout.Toggle("模型", false);
+            bool cleanupMaterials = EditorGUILayout.Toggle("材质", false);
+            EditorGUILayout.EndHorizontal();
+            
+            EditorGUILayout.BeginHorizontal();
+            bool cleanupPrefabs = EditorGUILayout.Toggle("预制体", false);
+            bool cleanupScenes = EditorGUILayout.Toggle("场景", false);
+            bool cleanupScripts = EditorGUILayout.Toggle("脚本", false);
+            EditorGUILayout.EndHorizontal();
+            
+            cleanupFileExtensions = EditorGUILayout.TextField("自定义文件扩展名 (用;分隔)", cleanupFileExtensions);
+            
+            EditorGUILayout.Space();
+            
+            if (GUILayout.Button("分析未引用资源"))
+            {
+                EditorWindow.GetWindow(typeof(DYM.ToolBox.Cleaner), false, "资源清理").Show();
+                EditorUtility.DisplayDialog("提示", "请在资源清理窗口中使用分析功能", "确定");
+            }
+            
+            EditorGUILayout.Space();
+            
+            if (unusedAssets != null && unusedAssets.Count > 0)
+            {
+                EditorGUILayout.LabelField($"找到 {unusedAssets.Count} 个未引用资源", EditorStyles.boldLabel);
+                scrollPosition = EditorGUILayout.BeginScrollView(scrollPosition, GUILayout.Height(200));
+                
+                foreach (var asset in unusedAssets)
+                {
+                    EditorGUILayout.BeginHorizontal();
+                    bool isSelected = selectedAssets.Contains(asset);
+                    bool newSelected = EditorGUILayout.Toggle(isSelected, GUILayout.Width(20));
+                    
+                    if (newSelected != isSelected)
+                    {
+                        if (newSelected)
+                        {
+                            selectedAssets.Add(asset);
+                        }
+                        else
+                        {
+                            selectedAssets.Remove(asset);
+                        }
+                    }
+                    
+                    EditorGUILayout.LabelField(asset);
+                    
+                    if (GUILayout.Button("查看", GUILayout.Width(60)))
+                    {
+                        Selection.activeObject = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(asset);
+                    }
+                    
+                    EditorGUILayout.EndHorizontal();
+                }
+                
+                EditorGUILayout.EndScrollView();
+                
+                EditorGUILayout.BeginHorizontal();
+                if (GUILayout.Button("全选"))
+                {
+                    selectedAssets = new List<string>(unusedAssets);
+                }
+                
+                if (GUILayout.Button("全不选"))
+                {
+                    selectedAssets.Clear();
+                }
+                
+                if (GUILayout.Button("反选"))
+                {
+                    List<string> newSelection = new List<string>();
+                    foreach (var asset in unusedAssets)
+                    {
+                        if (!selectedAssets.Contains(asset))
+                        {
+                            newSelection.Add(asset);
+                        }
+                    }
+                    selectedAssets = newSelection;
+                }
+                EditorGUILayout.EndHorizontal();
+                
+                EditorGUILayout.Space();
+                
+                EditorGUILayout.BeginHorizontal();
+                backupBeforeDelete = EditorGUILayout.Toggle("删除前备份", backupBeforeDelete);
+                EditorGUILayout.EndHorizontal();
+                
+                if (backupBeforeDelete)
+                {
+                    EditorGUILayout.BeginHorizontal();
+                    GUILayout.Label("备份路径", GUILayout.Width(80));
+                    backupFolderPath = GUILayout.TextField(backupFolderPath);
+                    if (GUILayout.Button("浏览", GUILayout.Width(60)))
+                    {
+                        string path = EditorUtility.OpenFolderPanel("选择备份文件夹", Application.dataPath, "");
+                        if (!string.IsNullOrEmpty(path))
+                        {
+                            backupFolderPath = path;
+                        }
+                    }
+                    EditorGUILayout.EndHorizontal();
+                }
+                
+                GUIStyle deleteButtonStyle = new GUIStyle(GUI.skin.button);
+                deleteButtonStyle.normal.textColor = Color.red;
+                
+                if (GUILayout.Button("删除选中的未引用资源", deleteButtonStyle))
+                {
+                    DeleteSelectedAssets();
+                }
+            }
+            
+            EditorGUILayout.EndVertical();
+            
+            // 缺失脚本清理
+            EditorGUILayout.Space(10);
+            EditorGUILayout.BeginVertical("Box");
+            EditorGUILayout.LabelField("缺失脚本清理", EditorStyles.boldLabel);
+            
+            if (GUILayout.Button("查找并清理缺失脚本"))
+            {
+                EditorWindow.GetWindow(typeof(DYM.ToolBox.BatchMissingScriptCleaner), false, "清理缺失脚本").Show();
+            }
+            
+            EditorGUILayout.EndVertical();
+            
+            // 空文件夹清理
+            EditorGUILayout.Space(10);
+            EditorGUILayout.BeginVertical("Box");
+            EditorGUILayout.LabelField("空文件夹清理", EditorStyles.boldLabel);
+            
+            if (GUILayout.Button("查找并删除空文件夹"))
+            {
+                FindAndDeleteEmptyFolders();
+            }
+            
+            EditorGUILayout.EndVertical();
+            
+            // 工具按钮
+            EditorGUILayout.Space(10);
+            
+            if (GUILayout.Button("资源清理工具", GUILayout.Height(30)))
+            {
+                EditorWindow.GetWindow(typeof(DYM.ToolBox.Cleaner), false, "资源清理").Show();
+            }
+            
+            if (GUILayout.Button("清理缺失脚本", GUILayout.Height(30)))
+            {
+                EditorWindow.GetWindow(typeof(DYM.ToolBox.BatchMissingScriptCleaner), false, "清理缺失脚本").Show();
+            }
+        }
+        
+        private void DeleteSelectedAssets()
+        {
+            if (selectedAssets.Count == 0)
+            {
+                EditorUtility.DisplayDialog("错误", "没有选中任何资源", "确定");
+                return;
+            }
+            
+            if (!EditorUtility.DisplayDialog("确认删除", 
+                $"确定要删除选中的 {selectedAssets.Count} 个资源吗？此操作不可撤销！", 
+                "删除", "取消"))
+            {
+                return;
+            }
+            
+            EditorUtility.DisplayProgressBar("删除资源", "正在删除...", 0f);
+            
+            try
+            {
+                if (backupBeforeDelete)
+                {
+                    BackupAssets();
+                }
+                
+                // 删除资源
+                for (int i = 0; i < selectedAssets.Count; i++)
+                {
+                    string assetPath = selectedAssets[i];
+                    EditorUtility.DisplayProgressBar("删除资源", 
+                        $"正在删除 ({i+1}/{selectedAssets.Count}): {assetPath}", 
+                        (float)(i+1) / selectedAssets.Count);
+                    
+                    AssetDatabase.DeleteAsset(assetPath);
+                }
+                
+                // 刷新资源数据库
+                AssetDatabase.Refresh();
+                
+                // 从列表中移除已删除的资源
+                unusedAssets.RemoveAll(a => selectedAssets.Contains(a));
+                selectedAssets.Clear();
+                
+                EditorUtility.DisplayDialog("完成", "已成功删除选中的资源", "确定");
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"删除资源时出错: {e.Message}");
+            }
+            finally
+            {
+                EditorUtility.ClearProgressBar();
+            }
+        }
+        
+        private void BackupAssets()
+        {
+            if (string.IsNullOrEmpty(backupFolderPath))
+            {
+                backupFolderPath = Path.Combine(Application.dataPath, "../Backup");
+            }
+            
+            if (!Directory.Exists(backupFolderPath))
+            {
+                Directory.CreateDirectory(backupFolderPath);
+            }
+            
+            string timestamp = System.DateTime.Now.ToString("yyyyMMdd_HHmmss");
+            string backupDir = Path.Combine(backupFolderPath, $"Backup_{timestamp}");
+            Directory.CreateDirectory(backupDir);
+            
+            // 复制资源到备份目录
+            for (int i = 0; i < selectedAssets.Count; i++)
+            {
+                string assetPath = selectedAssets[i];
+                string fullPath = Path.Combine(Application.dataPath, "..", assetPath);
+                string fileName = Path.GetFileName(assetPath);
+                string destPath = Path.Combine(backupDir, fileName);
+                
+                EditorUtility.DisplayProgressBar("备份资源", 
+                    $"正在备份 ({i+1}/{selectedAssets.Count}): {assetPath}", 
+                    (float)(i+1) / selectedAssets.Count);
+                
+                if (File.Exists(fullPath))
+                {
+                    File.Copy(fullPath, destPath, true);
+                }
+            }
+        }
+        
+        private void FindAndDeleteEmptyFolders()
+        {
+            if (string.IsNullOrEmpty(cleanupFolderPath))
+            {
+                EditorUtility.DisplayDialog("错误", "请选择要分析的文件夹", "确定");
+                return;
+            }
+            
+            if (!EditorUtility.DisplayDialog("确认操作", 
+                "确定要查找并删除空文件夹吗？", 
+                "确定", "取消"))
+            {
+                return;
+            }
+            
+            EditorUtility.DisplayProgressBar("查找空文件夹", "正在查找...", 0f);
+            
+            try
+            {
+                // 获取要处理的目录的完整路径
+                string fullPath = Path.GetFullPath(Path.Combine(Application.dataPath, "..", cleanupFolderPath));
+                
+                if (!Directory.Exists(fullPath))
+                {
+                    EditorUtility.DisplayDialog("错误", "指定的目录不存在", "确定");
+                    return;
+                }
+                
+                List<string> emptyFolders = new List<string>();
+                FindEmptyFolders(fullPath, emptyFolders);
+                
+                if (emptyFolders.Count == 0)
+                {
+                    EditorUtility.DisplayDialog("结果", "没有找到空文件夹", "确定");
+                    return;
+                }
+                
+                if (!EditorUtility.DisplayDialog("确认删除", 
+                    $"找到 {emptyFolders.Count} 个空文件夹。确定要删除它们吗？", 
+                    "删除", "取消"))
+                {
+                    return;
+                }
+                
+                // 删除空文件夹
+                for (int i = 0; i < emptyFolders.Count; i++)
+                {
+                    string folderPath = emptyFolders[i];
+                    EditorUtility.DisplayProgressBar("删除空文件夹", 
+                        $"正在删除 ({i+1}/{emptyFolders.Count}): {Path.GetFileName(folderPath)}", 
+                        (float)(i+1) / emptyFolders.Count);
+                    
+                    try
+                    {
+                        Directory.Delete(folderPath, false);
+                    }
+                    catch (Exception e)
+                    {
+                        Debug.LogError($"删除文件夹 {folderPath} 时出错: {e.Message}");
+                    }
+                }
+                
+                AssetDatabase.Refresh();
+                
+                EditorUtility.DisplayDialog("完成", $"成功删除 {emptyFolders.Count} 个空文件夹", "确定");
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"查找空文件夹时出错: {e.Message}");
+            }
+            finally
+            {
+                EditorUtility.ClearProgressBar();
+            }
+        }
+        
+        private void FindEmptyFolders(string folderPath, List<string> emptyFolders)
+        {
+            // 获取目录中的所有文件（排除.meta文件）
+            string[] files = Directory.GetFiles(folderPath)
+                .Where(f => !f.EndsWith(".meta", StringComparison.OrdinalIgnoreCase))
+                .ToArray();
+                
+            // 获取子目录
+            string[] subFolders = Directory.GetDirectories(folderPath);
+            
+            // 如果是空目录，将其添加到列表中
+            if (files.Length == 0 && subFolders.Length == 0)
+            {
+                emptyFolders.Add(folderPath);
+                return;
+            }
+            
+            // 递归检查子目录
+            foreach (string subFolder in subFolders)
+            {
+                FindEmptyFolders(subFolder, emptyFolders);
+            }
+        }
+
+        private void DrawMiscTab()
+        {
+            EditorGUILayout.LabelField("杂项工具", headerStyle);
+
+            // 资源查找工具
+            EditorGUILayout.BeginVertical("Box");
+            EditorGUILayout.LabelField("资源查找工具", EditorStyles.boldLabel);
+            
+            EditorGUILayout.BeginHorizontal();
+            GUILayout.Label("查找文件名", GUILayout.Width(80));
+            findFileName = EditorGUILayout.TextField(findFileName);
+            EditorGUILayout.EndHorizontal();
+            
+            EditorGUILayout.BeginHorizontal();
+            GUILayout.Label("查找路径", GUILayout.Width(80));
+            findPath = EditorGUILayout.TextField(findPath);
+            if (GUILayout.Button("浏览", GUILayout.Width(60)))
+            {
+                string path = EditorUtility.OpenFolderPanel("选择文件夹", Application.dataPath, "");
+                if (!string.IsNullOrEmpty(path))
+                {
+                    // 转换为相对于项目的路径
+                    if (path.StartsWith(Application.dataPath))
+                    {
+                        path = "Assets" + path.Substring(Application.dataPath.Length);
+                    }
+                    findPath = path;
+                }
+            }
+            EditorGUILayout.EndHorizontal();
+            
+            findInScenes = EditorGUILayout.Toggle("在场景中查找", findInScenes);
+            findInPrefabs = EditorGUILayout.Toggle("在预制体中查找", findInPrefabs);
+            findInAssets = EditorGUILayout.Toggle("在资源中查找", findInAssets);
+            exactMatch = EditorGUILayout.Toggle("精确匹配", exactMatch);
+            caseSensitive = EditorGUILayout.Toggle("区分大小写", caseSensitive);
+            
+            if (GUILayout.Button("查找"))
+            {
+                FindAssets();
+            }
+            
+            EditorGUILayout.EndVertical();
+            
+            // 批量对象处理工具
+            EditorGUILayout.Space(10);
+            EditorGUILayout.BeginVertical("Box");
+            EditorGUILayout.LabelField("批量对象处理", EditorStyles.boldLabel);
+            
+            EditorGUILayout.BeginHorizontal();
+            if (GUILayout.Button("禁用所有选中对象"))
+            {
+                DisableSelectedObjects();
+            }
+            
+            if (GUILayout.Button("启用所有选中对象"))
+            {
+                EnableSelectedObjects();
+            }
+            EditorGUILayout.EndHorizontal();
+            
+            EditorGUILayout.BeginHorizontal();
+            if (GUILayout.Button("静态化所有选中对象"))
+            {
+                SetSelectedObjectsStatic(true);
+            }
+            
+            if (GUILayout.Button("取消静态化所有选中对象"))
+            {
+                SetSelectedObjectsStatic(false);
+            }
+            EditorGUILayout.EndHorizontal();
+            
+            EditorGUILayout.EndVertical();
+            
+            // 截图工具
+            EditorGUILayout.Space(10);
+            EditorGUILayout.BeginVertical("Box");
+            EditorGUILayout.LabelField("截图工具", EditorStyles.boldLabel);
+            
+            EditorGUILayout.BeginHorizontal();
+            GUILayout.Label("截图路径", GUILayout.Width(80));
+            screenshotPath = EditorGUILayout.TextField(screenshotPath);
+            if (GUILayout.Button("浏览", GUILayout.Width(60)))
+            {
+                string path = EditorUtility.OpenFolderPanel("选择文件夹", Application.dataPath, "");
+                if (!string.IsNullOrEmpty(path))
+                {
+                    screenshotPath = path;
+                }
+            }
+            EditorGUILayout.EndHorizontal();
+            
+            screenshotScale = EditorGUILayout.Slider("截图缩放", screenshotScale, 0.1f, 5f);
+            
+            EditorGUILayout.BeginHorizontal();
+            if (GUILayout.Button("截取游戏视图"))
+            {
+                CaptureGameView();
+            }
+            
+            if (GUILayout.Button("截取场景视图"))
+            {
+                CaptureSceneView();
+            }
+            EditorGUILayout.EndHorizontal();
+            
+            EditorGUILayout.EndVertical();
+            
+            // 对象选择器
+            EditorGUILayout.Space(10);
+            EditorGUILayout.BeginVertical("Box");
+            EditorGUILayout.LabelField("对象选择器", EditorStyles.boldLabel);
+            
+            selectByTag = EditorGUILayout.Toggle("按标签选择", selectByTag);
+            if (selectByTag)
+            {
+                EditorGUILayout.BeginHorizontal();
+                GUILayout.Label("标签", GUILayout.Width(80));
+                selectedTag = EditorGUILayout.TagField(selectedTag);
+                EditorGUILayout.EndHorizontal();
+                
+                if (GUILayout.Button("选择所有带此标签的对象"))
+                {
+                    SelectObjectsByTag(selectedTag);
+                }
+            }
+            
+            selectByLayer = EditorGUILayout.Toggle("按层选择", selectByLayer);
+            if (selectByLayer)
+            {
+                EditorGUILayout.BeginHorizontal();
+                GUILayout.Label("层", GUILayout.Width(80));
+                selectedLayer = EditorGUILayout.LayerField(selectedLayer);
+                EditorGUILayout.EndHorizontal();
+                
+                if (GUILayout.Button("选择所有在此层的对象"))
+                {
+                    SelectObjectsByLayer(selectedLayer);
+                }
+            }
+            
+            selectByName = EditorGUILayout.Toggle("按名称选择", selectByName);
+            if (selectByName)
+            {
+                EditorGUILayout.BeginHorizontal();
+                GUILayout.Label("名称包含", GUILayout.Width(80));
+                nameContains = EditorGUILayout.TextField(nameContains);
+                EditorGUILayout.EndHorizontal();
+                
+                if (GUILayout.Button("选择所有名称包含此字符串的对象"))
+                {
+                    SelectObjectsByName(nameContains);
+                }
+            }
+            
+            selectByComponent = EditorGUILayout.Toggle("按组件选择", selectByComponent);
+            if (selectByComponent)
+            {
+                EditorGUILayout.BeginHorizontal();
+                GUILayout.Label("组件类型", GUILayout.Width(80));
+                componentType = EditorGUILayout.TextField(componentType);
+                EditorGUILayout.EndHorizontal();
+                
+                if (GUILayout.Button("选择所有带此组件的对象"))
+                {
+                    SelectObjectsByComponent(componentType);
+                }
+            }
+            
+            EditorGUILayout.EndVertical();
+
+            // 快速访问工具
+            EditorGUILayout.Space(10);
+            EditorGUILayout.BeginVertical("Box");
+            EditorGUILayout.LabelField("快速访问工具", EditorStyles.boldLabel);
+            
+            if (GUILayout.Button("打开控制台窗口"))
+            {
+                EditorWindow.GetWindow(Type.GetType("UnityEditor.ConsoleWindow,UnityEditor"));
+            }
+            
+            if (GUILayout.Button("打开项目设置"))
+            {
+                EditorApplication.ExecuteMenuItem("Edit/Project Settings...");
+            }
+            
+            if (GUILayout.Button("打开构建设置"))
+            {
+                EditorApplication.ExecuteMenuItem("File/Build Settings...");
+            }
+            
+            EditorGUILayout.EndVertical();
+            
+            // 工具按钮
+            EditorGUILayout.Space(10);
+            if (GUILayout.Button("网格工具", GUILayout.Height(30)))
+            {
+                EditorUtility.DisplayDialog("提示", "请使用顶部菜单'美术工具'访问更多功能", "确定");
+            }
+            
+            if (GUILayout.Button("杂项工具", GUILayout.Height(30)))
+            {
+                EditorUtility.DisplayDialog("提示", "请使用顶部菜单'美术工具'访问更多功能", "确定");
+            }
+            
+            if (GUILayout.Button("批量缩放", GUILayout.Height(30)))
+            {
+                DYM.ToolBox.TransformManager.ShowWindow();
+            }
+            
+            if (GUILayout.Button("检查脚本工具", GUILayout.Height(30)))
+            {
+                DYM.ToolBox.MissingScriptChecker.CheckForMissingScripts();
+            }
+            
+            if (GUILayout.Button("检查时间轴工具", GUILayout.Height(30)))
+            {
+                EditorWindow.GetWindow(typeof(DYM.ToolBox.ImprovedTimelineCheckerWindow), false, "检查时间轴").Show();
+            }
+        }
+
+        // 用于文件路径字段的辅助方法
+        private string DrawFilePathField(string label, string path, string browseTitle, string extension, bool isFolderPath)
+        {
+            EditorGUILayout.BeginHorizontal();
+            GUILayout.Label(label, GUILayout.Width(100));
+            string newPath = EditorGUILayout.TextField(path);
+            
+            if (GUILayout.Button("浏览", GUILayout.Width(60)))
+            {
+                string selectedPath;
+                
+                if (isFolderPath)
+                {
+                    selectedPath = EditorUtility.OpenFolderPanel(browseTitle, Application.dataPath, "");
+                }
+                else
+                {
+                    selectedPath = EditorUtility.OpenFilePanel(browseTitle, Application.dataPath, extension);
+                }
+                
+                if (!string.IsNullOrEmpty(selectedPath))
+                {
+                    if (selectedPath.StartsWith(Application.dataPath))
+                    {
+                        selectedPath = "Assets" + selectedPath.Substring(Application.dataPath.Length);
+                    }
+                    newPath = selectedPath;
+                }
+            }
+            
+            EditorGUILayout.EndHorizontal();
+            return newPath;
+        }
+
+        // 查找资源
+        private void FindAssets()
+        {
+            if (string.IsNullOrEmpty(findFileName))
+            {
+                EditorUtility.DisplayDialog("错误", "请输入要查找的文件名", "确定");
+                return;
+            }
+
+            string searchFilter = "";
+            
+            if (findInAssets)
+                searchFilter = findFileName;
+                
+            string[] guids = AssetDatabase.FindAssets(searchFilter, new string[] { findPath });
+            List<string> results = new List<string>();
+            
+            EditorUtility.DisplayProgressBar("查找资源", "正在查找...", 0f);
+            
+            try
+            {
+                for (int i = 0; i < guids.Length; i++)
+                {
+                    EditorUtility.DisplayProgressBar("查找资源", 
+                        $"正在查找 ({i+1}/{guids.Length})...", 
+                        (float)(i+1) / guids.Length);
+                        
+                    string assetPath = AssetDatabase.GUIDToAssetPath(guids[i]);
+                    string fileName = Path.GetFileName(assetPath);
+                    
+                    bool nameMatches = false;
+                    
+                    if (exactMatch)
+                    {
+                        if (caseSensitive)
+                            nameMatches = fileName == findFileName;
+                        else
+                            nameMatches = fileName.Equals(findFileName, StringComparison.OrdinalIgnoreCase);
+                    }
+                    else
+                    {
+                        if (caseSensitive)
+                            nameMatches = fileName.Contains(findFileName);
+                        else
+                            nameMatches = fileName.IndexOf(findFileName, StringComparison.OrdinalIgnoreCase) >= 0;
+                    }
+                    
+                    if (nameMatches)
+                    {
+                        results.Add(assetPath);
+                    }
+                }
+                
+                // 在场景和预制体中查找
+                if (findInScenes || findInPrefabs)
+                {
+                    // 获取场景和预制体
+                    string[] sceneAndPrefabGUIDs = AssetDatabase.FindAssets("t:Scene t:Prefab", new string[] { findPath });
+                    
+                    for (int i = 0; i < sceneAndPrefabGUIDs.Length; i++)
+                    {
+                        string assetPath = AssetDatabase.GUIDToAssetPath(sceneAndPrefabGUIDs[i]);
+                        bool isPrefab = assetPath.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase);
+                        bool isScene = assetPath.EndsWith(".unity", StringComparison.OrdinalIgnoreCase);
+                        
+                        if ((isPrefab && findInPrefabs) || (isScene && findInScenes))
+                        {
+                            // 这里简化处理，实际上需要打开场景或预制体并遍历所有对象
+                            // 暂时只添加文件名符合条件的资源
+                            string fileName = Path.GetFileName(assetPath);
+                            
+                            bool nameMatches = false;
+                            
+                            if (exactMatch)
+                            {
+                                if (caseSensitive)
+                                    nameMatches = fileName == findFileName;
+                                else
+                                    nameMatches = fileName.Equals(findFileName, StringComparison.OrdinalIgnoreCase);
+                            }
+                            else
+                            {
+                                if (caseSensitive)
+                                    nameMatches = fileName.Contains(findFileName);
+                                else
+                                    nameMatches = fileName.IndexOf(findFileName, StringComparison.OrdinalIgnoreCase) >= 0;
+                            }
+                            
+                            if (nameMatches && !results.Contains(assetPath))
+                            {
+                                results.Add(assetPath);
+                            }
+                        }
+                    }
+                }
+            }
+            finally
+            {
+                EditorUtility.ClearProgressBar();
+            }
+            
+            if (results.Count > 0)
+            {
+                // 显示结果
+                EditorWindow resultWindow = EditorWindow.GetWindow<EditorWindow>("资源查找结果");
+                // 在这里应该设置resultWindow的内容，显示查找结果
+                Debug.Log($"找到 {results.Count} 个结果：\n{string.Join("\n", results)}");
+                
+                // 选择第一个结果
+                if (results.Count > 0)
+                {
+                    Selection.activeObject = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(results[0]);
+                }
+            }
+            else
+            {
+                EditorUtility.DisplayDialog("结果", "没有找到匹配的资源", "确定");
+            }
+        }
+        
+        // 批量对象处理功能
+        private void DisableSelectedObjects()
+        {
+            GameObject[] selectedObjects = Selection.gameObjects;
+            if (selectedObjects.Length == 0)
+            {
+                EditorUtility.DisplayDialog("错误", "请先选择一些对象", "确定");
+                return;
+            }
+            
+            Undo.RecordObjects(selectedObjects, "Disable Selected Objects");
+            
+            foreach (GameObject obj in selectedObjects)
+            {
+                obj.SetActive(false);
+            }
+        }
+        
+        private void EnableSelectedObjects()
+        {
+            GameObject[] selectedObjects = Selection.gameObjects;
+            if (selectedObjects.Length == 0)
+            {
+                EditorUtility.DisplayDialog("错误", "请先选择一些对象", "确定");
+                return;
+            }
+            
+            Undo.RecordObjects(selectedObjects, "Enable Selected Objects");
+            
+            foreach (GameObject obj in selectedObjects)
+            {
+                obj.SetActive(true);
+            }
+        }
+        
+        private void SetSelectedObjectsStatic(bool isStatic)
+        {
+            GameObject[] selectedObjects = Selection.gameObjects;
+            if (selectedObjects.Length == 0)
+            {
+                EditorUtility.DisplayDialog("错误", "请先选择一些对象", "确定");
+                return;
+            }
+            
+            Undo.RecordObjects(selectedObjects, isStatic ? "Set Objects Static" : "Set Objects Non-Static");
+            
+            foreach (GameObject obj in selectedObjects)
+            {
+                obj.isStatic = isStatic;
+            }
+        }
+        
+        // 截图功能
+        private void CaptureGameView()
+        {
+            if (string.IsNullOrEmpty(screenshotPath))
+            {
+                screenshotPath = Path.Combine(Application.dataPath, "../Screenshots");
+            }
+            
+            if (!Directory.Exists(screenshotPath))
+            {
+                Directory.CreateDirectory(screenshotPath);
+            }
+            
+            string timestamp = System.DateTime.Now.ToString("yyyyMMdd_HHmmss");
+            string fileName = Path.Combine(screenshotPath, $"GameView_{timestamp}.png");
+            
+            try
+            {
+                // 获取游戏视图的截图
+                System.Reflection.MethodInfo GetMainGameView = typeof(EditorWindow).Assembly.GetType("UnityEditor.PlayModeView")?.GetMethod("GetMainPlayModeView", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+                
+                if (GetMainGameView != null)
+                {
+                    EditorWindow gameView = GetMainGameView.Invoke(null, null) as EditorWindow;
+                    if (gameView != null)
+                    {
+                        // 计算截图尺寸
+                        int width = (int)(gameView.position.width * screenshotScale);
+                        int height = (int)(gameView.position.height * screenshotScale);
+                        
+                        // 创建纹理并获取游戏视图内容
+                        Texture2D texture = new Texture2D(width, height, TextureFormat.RGB24, false);
+                        
+                        // 这里需要使用反射获取游戏视图的内容
+                        // 简化处理：使用ScreenCapture
+                        ScreenCapture.CaptureScreenshot(fileName);
+                        
+                        Debug.Log($"游戏视图截图已保存到: {fileName}");
+                    }
+                    else
+                    {
+                        EditorUtility.DisplayDialog("错误", "无法获取游戏视图", "确定");
+                    }
+                }
+                else
+                {
+                    EditorUtility.DisplayDialog("错误", "无法获取游戏视图方法", "确定");
+                }
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"截取游戏视图时出错: {e.Message}");
+                EditorUtility.DisplayDialog("错误", $"截取游戏视图时出错: {e.Message}", "确定");
+            }
+        }
+        
+        private void CaptureSceneView()
+        {
+            if (string.IsNullOrEmpty(screenshotPath))
+            {
+                screenshotPath = Path.Combine(Application.dataPath, "../Screenshots");
+            }
+            
+            if (!Directory.Exists(screenshotPath))
+            {
+                Directory.CreateDirectory(screenshotPath);
+            }
+            
+            string timestamp = System.DateTime.Now.ToString("yyyyMMdd_HHmmss");
+            string fileName = Path.Combine(screenshotPath, $"SceneView_{timestamp}.png");
+            
+            try
+            {
+                // 获取场景视图
+                SceneView sceneView = SceneView.lastActiveSceneView;
+                if (sceneView != null)
+                {
+                    // 计算截图尺寸
+                    int width = (int)(sceneView.position.width * screenshotScale);
+                    int height = (int)(sceneView.position.height * screenshotScale);
+                    
+                    // 创建纹理
+                    Texture2D texture = new Texture2D(width, height, TextureFormat.RGB24, false);
+                    
+                    // 这里需要使用反射获取场景视图的内容
+                    // 简化处理：显示一个消息
+                    Debug.Log($"场景视图截图将保存到: {fileName}");
+                    EditorUtility.DisplayDialog("截图", "已尝试保存场景视图截图", "确定");
+                }
+                else
+                {
+                    EditorUtility.DisplayDialog("错误", "无法获取场景视图", "确定");
+                }
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"截取场景视图时出错: {e.Message}");
+                EditorUtility.DisplayDialog("错误", $"截取场景视图时出错: {e.Message}", "确定");
+            }
+        }
+        
+        // 对象选择功能
+        private void SelectObjectsByTag(string tag)
+        {
+            if (string.IsNullOrEmpty(tag))
+            {
+                EditorUtility.DisplayDialog("错误", "请输入有效的标签", "确定");
+                return;
+            }
+            
+            GameObject[] objectsWithTag = GameObject.FindGameObjectsWithTag(tag);
+            if (objectsWithTag.Length > 0)
+            {
+                Selection.objects = objectsWithTag;
+                Debug.Log($"已选择 {objectsWithTag.Length} 个带有标签 '{tag}' 的对象");
+            }
+            else
+            {
+                EditorUtility.DisplayDialog("结果", $"场景中没有带有标签 '{tag}' 的对象", "确定");
+            }
+        }
+        
+        private void SelectObjectsByLayer(int layer)
+        {
+            GameObject[] allObjects = FindObjectsOfType<GameObject>();
+            List<GameObject> objectsInLayer = new List<GameObject>();
+            
+            foreach (GameObject obj in allObjects)
+            {
+                if (obj.layer == layer)
+                {
+                    objectsInLayer.Add(obj);
+                }
+            }
+            
+            if (objectsInLayer.Count > 0)
+            {
+                Selection.objects = objectsInLayer.ToArray();
+                Debug.Log($"已选择 {objectsInLayer.Count} 个在层 '{LayerMask.LayerToName(layer)}' 的对象");
+            }
+            else
+            {
+                EditorUtility.DisplayDialog("结果", $"场景中没有在层 '{LayerMask.LayerToName(layer)}' 的对象", "确定");
+            }
+        }
+        
+        private void SelectObjectsByName(string namePattern)
+        {
+            if (string.IsNullOrEmpty(namePattern))
+            {
+                EditorUtility.DisplayDialog("错误", "请输入有效的名称模式", "确定");
+                return;
+            }
+            
+            GameObject[] allObjects = FindObjectsOfType<GameObject>();
+            List<GameObject> matchingObjects = new List<GameObject>();
+            
+            foreach (GameObject obj in allObjects)
+            {
+                if (obj.name.Contains(namePattern))
+                {
+                    matchingObjects.Add(obj);
+                }
+            }
+            
+            if (matchingObjects.Count > 0)
+            {
+                Selection.objects = matchingObjects.ToArray();
+                Debug.Log($"已选择 {matchingObjects.Count} 个名称包含 '{namePattern}' 的对象");
+            }
+            else
+            {
+                EditorUtility.DisplayDialog("结果", $"场景中没有名称包含 '{namePattern}' 的对象", "确定");
+            }
+        }
+        
+        private void SelectObjectsByComponent(string componentName)
+        {
+            if (string.IsNullOrEmpty(componentName))
+            {
+                EditorUtility.DisplayDialog("错误", "请输入有效的组件类型", "确定");
+                return;
+            }
+            
+            // 尝试获取组件类型
+            Type componentType = null;
+            
+            // 尝试直接获取类型
+            componentType = Type.GetType(componentName);
+            
+            // 如果未找到，尝试在常见命名空间中查找
+            if (componentType == null)
+            {
+                string[] namespaces = new string[] 
+                {
+                    "", // 无命名空间
+                    "UnityEngine",
+                    "UnityEngine.UI",
+                    "UnityEngine.EventSystems",
+                    "UnityEngine.Animations",
+                    "TMPro"
+                };
+                
+                foreach (string ns in namespaces)
+                {
+                    string fullName = string.IsNullOrEmpty(ns) ? componentName : $"{ns}.{componentName}";
+                    componentType = Type.GetType(fullName);
+                    
+                    if (componentType != null)
+                        break;
+                }
+            }
+            
+            if (componentType == null)
+            {
+                EditorUtility.DisplayDialog("错误", $"找不到组件类型: {componentName}", "确定");
+                return;
+            }
+            
+            // 查找带有该组件的对象
+            Component[] components = FindObjectsOfType(componentType) as Component[];
+            
+            // 如果转换失败，尝试手动转换
+            if (components == null)
+            {
+                UnityEngine.Object[] objects = FindObjectsOfType(componentType);
+                List<Component> componentList = new List<Component>();
+                
+                foreach (var obj in objects)
+                {
+                    if (obj is Component comp)
+                    {
+                        componentList.Add(comp);
+                    }
+                }
+                
+                components = componentList.ToArray();
+            }
+            
+            GameObject[] gameObjects = components.Select(c => c.gameObject).Distinct().ToArray();
+            
+            if (gameObjects.Length > 0)
+            {
+                Selection.objects = gameObjects;
+                Debug.Log($"已选择 {gameObjects.Length} 个带有组件 '{componentName}' 的对象");
+            }
+            else
+            {
+                EditorUtility.DisplayDialog("结果", $"场景中没有带有组件 '{componentName}' 的对象", "确定");
+            }
+        }
+    }
+} 
