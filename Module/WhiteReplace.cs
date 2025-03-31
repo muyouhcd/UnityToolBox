@@ -5,13 +5,13 @@ using System.IO;
 namespace DYM.ToolBox
 {
 
-//�滻ָ��·����prefab�����в���Ϊָ������
+//替换指定路径的prefab中的材质为指定材质
 public class ReplaceMaterialsInPrefabs : EditorWindow
 {
-    private string searchInFolder = "Assets/Prefabs"; // Ĭ�������ļ���·��
-    private Material newMaterial; // �û�ָ�����²���
+    private string searchInFolder = "Assets/Prefabs"; // 默认搜索文件夹路径
+    private Material newMaterial; // 用户指定的新材质
 
-    [MenuItem("��������/�滻����/�滻prefab�еĲ���")]
+    [MenuItem("美术工具/替换材质/替换prefab中的材质")]
     public static void ShowWindow()
     {
         GetWindow<ReplaceMaterialsInPrefabs>("Replace Prefab Materials");
@@ -26,7 +26,7 @@ public class ReplaceMaterialsInPrefabs : EditorWindow
         searchInFolder = GUILayout.TextField(searchInFolder);
         GUILayout.EndHorizontal();
 
-        // �²��ʵ��Ϸſ�
+        // 新材质的拖放框
         newMaterial = (Material)EditorGUILayout.ObjectField("New Material", newMaterial, typeof(Material), false);
 
         if (GUILayout.Button("Replace Materials"))
