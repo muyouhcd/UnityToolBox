@@ -10,7 +10,7 @@ public class FBXToPrefabConverterWindow : EditorWindow
     private string fbxFolderPath = "Assets/YourFBXFolder";
     private string prefabFolderPath = "Assets/Prefabs";
 
-    [MenuItem("美术工具/生成工具/FBX转换为Prefab")]
+    [MenuItem("缇庢湳宸ュ叿/鐢熸垚宸ュ叿/FBX杞崲涓篜refab")]
     public static void ShowWindow()
     {
         GetWindow<FBXToPrefabConverterWindow>("FBX to Prefab Converter");
