@@ -22,16 +22,8 @@ namespace DYM.ToolBox
             Misc
         }
 
-
-
         //检查工具变量
-
         
-
-
-
-
-
         private TabType selectedTab = TabType.Transform;
         private Vector2 scrollPosition;
         private GUIStyle headerStyle;
