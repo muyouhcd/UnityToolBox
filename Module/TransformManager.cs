@@ -1,38 +1,22 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using UnityEditor;
-using UnityEngine;
-using System;
 using System.Text.RegularExpressions;
-using UnityEditor.ShortcutManagement;
-using Unity.AI.Navigation; // 确保导入正确的命名空间
-using UnityEditor.Experimental.SceneManagement;
-using UnityEngine.SceneManagement;
-using UnityEditor.SceneManagement;
-using UnityEngine.UI;
-using System.Security.Cryptography;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using UnityEditor;
-using UnityEngine;
-using System;
-using System.Text.RegularExpressions;
-using UnityEditor.ShortcutManagement;
-using Unity.AI.Navigation; // 确保导入正确的命名空间
 using UnityEditor.Experimental.SceneManagement;
-using UnityEngine.SceneManagement;
 using UnityEditor.SceneManagement;
+using UnityEditor.ShortcutManagement;
+using UnityEngine;
+using UnityEngine.SceneManagement;
 using UnityEngine.UI;
-using System.Security.Cryptography;
+using Unity.AI.Navigation;
 
 namespace DYM.ToolBox
 {
-
-
 public class TransformManager : EditorWindow
 {
+    private int SpaceHeight = 10;
     private Vector2 scrollPosition;
     private const float ScaleFactor = 0.01f;
     private Vector3 copiedPosition;
@@ -40,23 +24,27 @@ public class TransformManager : EditorWindow
     private GameObject targetPrefab;  // 要查找的嵌套预制体
     private static List<Vector3> recordedPositions = new List<Vector3>();
 
+    // 线性阵列参数
     private int numberOfCopies = 5;
     private float distance = 1.0f;
     private bool xAxis = true;
     private bool yAxis = false;
     private bool zAxis = false;
 
-
+    // 矩形阵列参数
     private float xSpacing = 1f;
     private float zSpacing = 1f;
 
+    // 圆形阵列参数
     private GameObject centerObject;
     private GameObject objectToDuplicate;
     private int count = 8;
     private float radius = 5f;
-    private bool autoCalculateRadius = true; // 增加自动计算半径选项
+    private bool autoCalculateRadius = true;
     private bool lookAtCenter = true;
 
+
+    private float quarterValue = 0.25f; // 默认取整值
 
     [MenuItem("美术工具/地编工具/变换操作")]
     public static void ShowWindow()
@@ -64,18 +52,17 @@ public class TransformManager : EditorWindow
         GetWindow<TransformManager>("TransformManager");
     }
 
-
-
     private void OnGUI()
     {
         scrollPosition = GUILayout.BeginScrollView(scrollPosition);
 
+        // 基础变换工具
         if (GUILayout.Button("下落物体"))
         {
             DropSelectedObjectsToMesh();
         }
 
-        GUILayout.Space(10); // 添加一些空隙
+        GUILayout.Space(SpaceHeight);
 
         if (GUILayout.Button("复制位置旋转变换"))
         {
@@ -85,12 +72,16 @@ public class TransformManager : EditorWindow
         {
             PasteTransform();
         }
-        GUILayout.Space(10); // 添加一些空隙
+        
+        GUILayout.Space(SpaceHeight);
+        
         if (GUILayout.Button("选取两个物体交换位置旋转"))
         {
             SwapTransforms();
         }
-        GUILayout.Space(10); // 添加一些空隙
+        
+        GUILayout.Space(SpaceHeight);
+        
         if (GUILayout.Button("批量复制底部中心位置（需要同名）"))
         {
             RecordPositions();
@@ -99,75 +90,79 @@ public class TransformManager : EditorWindow
         {
             PastePositions();
         }
-        GUILayout.Space(10); // 添加一些空隙
+        
+        GUILayout.Space(SpaceHeight);
+        
         if (GUILayout.Button("尺寸缩小100比例"))
         {
             ResizeSelectedObject();
         }
 
-        GUILayout.Space(10); // 添加一些空隙
+        GUILayout.Space(SpaceHeight);
 
-        GUILayout.Label("Array Duplicate Options", EditorStyles.boldLabel);
+        // 线性阵列
+        GUILayout.Label("线性阵列选项", EditorStyles.boldLabel);
 
-        numberOfCopies = EditorGUILayout.IntField("Number of Copies", numberOfCopies);
-        distance = EditorGUILayout.FloatField("Distance", distance);
+        numberOfCopies = EditorGUILayout.IntField("复制数量", numberOfCopies);
+        distance = EditorGUILayout.FloatField("间距", distance);
 
-        GUILayout.Label("Axis");
+        GUILayout.Label("方向");
         EditorGUILayout.BeginHorizontal();
         xAxis = EditorGUILayout.Toggle("X", xAxis);
         yAxis = EditorGUILayout.Toggle("Y", yAxis);
         zAxis = EditorGUILayout.Toggle("Z", zAxis);
         EditorGUILayout.EndHorizontal();
 
-        if (GUILayout.Button("Duplicate Selected"))
+        if (GUILayout.Button("复制所选物体"))
         {
             ArrayDuplicate();
         }
 
+        GUILayout.Space(SpaceHeight);
+
+        // 矩形阵列
         EditorGUILayout.LabelField("矩形阵列所选物体", EditorStyles.boldLabel);
         EditorGUILayout.BeginHorizontal();
-        EditorGUILayout.LabelField("X Spacing", GUILayout.Width(100));  // 控制标签的宽度
-        xSpacing = EditorGUILayout.FloatField(xSpacing);  // 自动调整宽度
-        EditorGUILayout.LabelField("Z Spacing", GUILayout.Width(100));  // 控制标签的宽度
-        zSpacing = EditorGUILayout.FloatField(zSpacing);  // 自动调整宽度
+        EditorGUILayout.LabelField("X 间距", GUILayout.Width(100));
+        xSpacing = EditorGUILayout.FloatField(xSpacing);
+        EditorGUILayout.LabelField("Z 间距", GUILayout.Width(100));
+        zSpacing = EditorGUILayout.FloatField(zSpacing);
         if (GUILayout.Button("阵列所选物体"))
         {
             ArrangeSelectedObjects();
         }
         EditorGUILayout.EndHorizontal();
 
+        GUILayout.Space(SpaceHeight);
 
-        GUILayout.Space(10); // 添加一些空隙
-
-        //圆周阵列
+        // 圆周阵列
         EditorGUILayout.LabelField("圆周阵列", EditorStyles.boldLabel);
 
         EditorGUILayout.BeginHorizontal();
-        EditorGUILayout.LabelField("中心参照物", GUILayout.Width(100));  // 控制标签的宽度
-        centerObject = (GameObject)EditorGUILayout.ObjectField(centerObject, typeof(GameObject), true);  // 控制对象字段的宽度
-        EditorGUILayout.LabelField("阵列物体", GUILayout.Width(100));  // 控制标签的宽度
-        objectToDuplicate = (GameObject)EditorGUILayout.ObjectField(objectToDuplicate, typeof(GameObject), true);  // 控制对象字段的宽度
+        EditorGUILayout.LabelField("中心参照物", GUILayout.Width(100));
+        centerObject = (GameObject)EditorGUILayout.ObjectField(centerObject, typeof(GameObject), true);
+        EditorGUILayout.LabelField("阵列物体", GUILayout.Width(100));
+        objectToDuplicate = (GameObject)EditorGUILayout.ObjectField(objectToDuplicate, typeof(GameObject), true);
         EditorGUILayout.EndHorizontal();
 
         EditorGUILayout.BeginHorizontal();
-        EditorGUILayout.LabelField("计数", GUILayout.Width(100));  // 控制标签的宽度
-        count = EditorGUILayout.IntField(count, GUILayout.Width(100));  // 控制输入字段的宽度
+        EditorGUILayout.LabelField("计数", GUILayout.Width(100));
+        count = EditorGUILayout.IntField(count, GUILayout.Width(100));
         EditorGUILayout.LabelField("自动半径", GUILayout.Width(100));
-        autoCalculateRadius = EditorGUILayout.Toggle(autoCalculateRadius, GUILayout.Width(16));  // 控制Toggle的宽度
+        autoCalculateRadius = EditorGUILayout.Toggle(autoCalculateRadius, GUILayout.Width(16));
         if (!autoCalculateRadius)
         {
-            EditorGUILayout.LabelField("直径", GUILayout.Width(50));  // 控制标签的宽度
-            radius = EditorGUILayout.FloatField(radius, GUILayout.Width(50));  // 控制输入字段的宽度
+            EditorGUILayout.LabelField("直径", GUILayout.Width(50));
+            radius = EditorGUILayout.FloatField(radius, GUILayout.Width(50));
         }
         EditorGUILayout.LabelField("朝向中心", GUILayout.Width(100));
-        lookAtCenter = EditorGUILayout.Toggle(lookAtCenter, GUILayout.Width(16));  // 控制Toggle的宽度
+        lookAtCenter = EditorGUILayout.Toggle(lookAtCenter, GUILayout.Width(16));
         if (GUILayout.Button("计算阵列"))
         {
             if (centerObject != null && objectToDuplicate != null)
             {
                 if (autoCalculateRadius)
                 {
-                    // 自动计算半径
                     radius = Vector3.Distance(centerObject.transform.position, objectToDuplicate.transform.position);
                 }
                 GenerateCircleArray();
@@ -179,29 +174,28 @@ public class TransformManager : EditorWindow
         }
         EditorGUILayout.EndHorizontal();
 
+        GUILayout.Space(SpaceHeight);
 
 
-
-
-
-
-
-
-
-
+        EditorGUILayout.BeginHorizontal();
+        EditorGUILayout.LabelField("位置取整参数", GUILayout.Width(100));
+        quarterValue = EditorGUILayout.FloatField(quarterValue, GUILayout.Width(50));
+        if (GUILayout.Button("位置取整"))
+        {
+            RoundPositionToQuarter(quarterValue);
+        }
+        EditorGUILayout.EndHorizontal();
 
         GUILayout.EndScrollView();
     }
 
-    // private string ()
-    // {}
-
+    #region 基础变换方法
     private void CopyTransform()
     {
         if (Selection.activeTransform != null)
         {
-            copiedPosition = Selection.activeTransform.position; // 正确的。位置赋值给 Vector3
-            copiedRotation = Selection.activeTransform.rotation; // 正确的。旋转赋值给 Quaternion
+            copiedPosition = Selection.activeTransform.position;
+            copiedRotation = Selection.activeTransform.rotation;
             Debug.Log("World Position & Rotation Copied");
         }
         else
@@ -215,9 +209,8 @@ public class TransformManager : EditorWindow
         if (Selection.activeTransform != null)
         {
             Undo.RecordObject(Selection.activeTransform, "Paste World Position & Rotation");
-
-            Selection.activeTransform.position = copiedPosition; // 正确的。Vector3 赋值给位置
-            Selection.activeTransform.rotation = copiedRotation; // 正确的。Quaternion 赋值给旋转
+            Selection.activeTransform.position = copiedPosition;
+            Selection.activeTransform.rotation = copiedRotation;
             Debug.Log("World Position & Rotation Pasted to selected object");
         }
         else
@@ -225,6 +218,7 @@ public class TransformManager : EditorWindow
             Debug.Log("No object selected to paste transform");
         }
     }
+
     public static void SwapTransforms()
     {
         GameObject[] selectedObjects = Selection.gameObjects;
@@ -237,15 +231,15 @@ public class TransformManager : EditorWindow
         GameObject obj1 = selectedObjects[0];
         GameObject obj2 = selectedObjects[1];
 
-        // Store the transform data
+        // 暂存第一个物体的变换数据
         Vector3 position1 = obj1.transform.position;
-        Vector3 rotation1 = obj1.transform.eulerAngles; // Use eulerAngles for simplicity
+        Vector3 rotation1 = obj1.transform.eulerAngles;
 
-        // Swap positions
+        // 交换位置
         obj1.transform.position = obj2.transform.position;
         obj2.transform.position = position1;
 
-        // Swap rotations
+        // 交换旋转
         obj1.transform.eulerAngles = obj2.transform.eulerAngles;
         obj2.transform.eulerAngles = rotation1;
 
@@ -277,6 +271,7 @@ public class TransformManager : EditorWindow
             Debug.LogWarning("No object selected!");
         }
     }
+
     private void PastePositions()
     {
         if (targetPrefab == null)
@@ -310,7 +305,6 @@ public class TransformManager : EditorWindow
 
     private static void ResizeSelectedObject()
     {
-        // 获取当前选中的游戏对象
         GameObject[] selectedObjects = Selection.gameObjects;
 
         if (selectedObjects.Length > 0)
@@ -327,6 +321,7 @@ public class TransformManager : EditorWindow
             Debug.LogWarning("没有选中任何物体！");
         }
     }
+
     private Vector3 GetBottomCenterPosition(Transform objTransform)
     {
         Renderer renderer = objTransform.GetComponent<Renderer>();
@@ -343,10 +338,9 @@ public class TransformManager : EditorWindow
             return Vector3.zero;
         }
     }
+    #endregion
 
-
-
-
+    #region 阵列方法
     private void ArrayDuplicate()
     {
         if (Selection.transforms.Length == 0)
@@ -387,37 +381,35 @@ public class TransformManager : EditorWindow
         }
     }
 
-    void ArrangeSelectedObjects()
+    private void ArrangeSelectedObjects()
     {
-        // 获取当前选中的所有游戏对象
         GameObject[] selectedObjects = Selection.gameObjects;
 
-        // 如果没有选中任何对象，显示一个错误对话框并退出方法
         if (selectedObjects.Length == 0)
         {
             EditorUtility.DisplayDialog("Error", "No objects selected!", "OK");
             return;
         }
 
-        // 根据名称进行排序，按照自然数顺序
+        // 按名称自然排序
         Array.Sort(selectedObjects, (x, y) => NaturalCompare(x.name, y.name));
 
-        // 根据选中的对象数量计算网格的大小
+        // 计算网格大小
         int gridSize = Mathf.CeilToInt(Mathf.Sqrt(selectedObjects.Length));
 
-        // 遍历所有选中的对象并在网格中排列它们
+        // 排列物体
         for (int i = 0; i < selectedObjects.Length; i++)
         {
-            int row = i / gridSize; // 计算当前对象应该在第几行
-            int col = i % gridSize; // 计算当前对象应该在第几列
-            Vector3 newPosition = new Vector3(col * xSpacing, selectedObjects[i].transform.position.y, row * zSpacing); // 设定新位置
-            selectedObjects[i].transform.position = newPosition; // 应用新位置
+            int row = i / gridSize;
+            int col = i % gridSize;
+            Vector3 newPosition = new Vector3(col * xSpacing, selectedObjects[i].transform.position.y, row * zSpacing);
+            selectedObjects[i].transform.position = newPosition;
         }
     }
 
     private void GenerateCircleArray()
     {
-        // 先计算出每个物体的位置和旋转
+        // 先计算位置和旋转
         Vector3[] positions = new Vector3[count];
         Quaternion[] rotations = new Quaternion[count];
 
@@ -429,7 +421,7 @@ public class TransformManager : EditorWindow
             rotations[i] = CalculateRotation(angle);
         }
 
-        // 然后进行物体实例化并设置其位置和旋转
+        // 创建物体
         for (int i = 0; i < count; i++)
         {
             GameObject instance = InstantiateObject(objectToDuplicate);
@@ -444,7 +436,6 @@ public class TransformManager : EditorWindow
             Undo.RegisterCreatedObjectUndo(instance, "Create Object Array");
         }
     }
-
 
     private Vector3 CalculatePosition(float angle)
     {
@@ -473,46 +464,9 @@ public class TransformManager : EditorWindow
     {
         return Quaternion.Euler(0, angle, 0);
     }
+    #endregion
 
-    public class NaturalComparer : IComparer<string>
-    {
-        private static readonly Regex _regex = new Regex(@"(\d+)|(\D+)", RegexOptions.Compiled);
-
-        public int Compare(string x, string y)
-        {
-            // If both strings are identical or either is null, no need to compare further.
-            if (string.Equals(x, y, StringComparison.OrdinalIgnoreCase))
-                return 0;
-            if (x == null) return -1;
-            if (y == null) return 1;
-
-            // Compare each numerical or textual chunk one by one from both strings.
-            var xMatches = _regex.Matches(x);
-            var yMatches = _regex.Matches(y);
-            for (int i = 0; i < Math.Min(xMatches.Count, yMatches.Count); i++)
-            {
-                var xPart = xMatches[i].Value;
-                var yPart = yMatches[i].Value;
-
-                // If both are numeric, compare numerically.
-                if (int.TryParse(xPart, out int xNum) && int.TryParse(yPart, out int yNum))
-                {
-                    int numCompare = xNum.CompareTo(yNum);
-                    if (numCompare != 0)
-                        return numCompare;
-                }
-                else // If any or both are non-numeric, compare as text.
-                {
-                    int stringCompare = string.Compare(xPart, yPart, StringComparison.OrdinalIgnoreCase);
-                    if (stringCompare != 0)
-                        return stringCompare;
-                }
-            }
-
-            // If all parts matched but one string has additional chunks, the shorter string goes first.
-            return xMatches.Count.CompareTo(yMatches.Count);
-        }
-    }
+    #region 自然排序
     private int NaturalCompare(string a, string b)
     {
         if (string.IsNullOrEmpty(a) || string.IsNullOrEmpty(b))
@@ -545,10 +499,9 @@ public class TransformManager : EditorWindow
         }
         return r;
     }
+    #endregion
 
-
-
-    
+    #region 物体下落方法
     public static void DropSelectedObjectsToMesh()
     {
         var selectedObjects = Selection.gameObjects;
@@ -566,6 +519,7 @@ public class TransformManager : EditorWindow
 
         CleanupAddedColliders(addedColliders);
     }
+
     private static void CleanupAddedColliders(List<Collider> addedColliders)
     {
         foreach (Collider addedCollider in addedColliders)
@@ -576,7 +530,6 @@ public class TransformManager : EditorWindow
             }
         }
     }
-
 
     private static void EnsureCollidersExistAndGather(ref List<Collider> addedColliders)
     {
@@ -589,6 +542,7 @@ public class TransformManager : EditorWindow
             }
         }
     }
+
     private static void DropObjectsToMesh(GameObject[] selectedObjects, ref List<Collider> addedColliders)
     {
         foreach (GameObject obj in selectedObjects)
@@ -614,17 +568,38 @@ public class TransformManager : EditorWindow
             }
         }
     }
+
     private static Vector3 GetColliderBottomPoint(Collider collider)
     {
         Vector3 bottomCenterPoint = collider.bounds.center;
         bottomCenterPoint.y -= collider.bounds.extents.y;
         return bottomCenterPoint;
     }
+    #endregion
 
 
 
 
 
 
+    static void RoundPositionToQuarter(float QuarterNum)
+    {
+        foreach (GameObject obj in Selection.gameObjects)
+        {
+            Undo.RecordObject(obj.transform, "Round Position to Quarter");
+            Vector3 currentPosition = obj.transform.position;
+            Vector3 roundedPosition = new Vector3(
+                RoundToNearestQuarter(currentPosition.x),
+                RoundToNearestQuarter(currentPosition.y),
+                RoundToNearestQuarter(currentPosition.z)
+            );
+            obj.transform.position = roundedPosition;
+        }
+    }
+
+    static float RoundToNearestQuarter(float value)
+    {
+        return Mathf.Round(value * 4f) / 4f;
+    }
 }
 }
