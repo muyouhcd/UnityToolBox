@@ -128,6 +128,74 @@ public class AssetNameCheckerWindow : EditorWindow
             CheckChineseCharactersInAssetNames(folderPath);
         }
 
+        // 添加按钮：移除文件名末尾下划线
+        if (GUILayout.Button("移除文件名末尾的下划线"))
+        {
+            if (string.IsNullOrEmpty(folderPath))
+            {
+                Debug.LogError("路径不能为空！");
+                return;
+            }
+            if (!AssetDatabase.IsValidFolder(folderPath))
+            {
+                Debug.LogError($"路径无效: {folderPath}. 请确保输入的是一个有效的文件夹路径！");
+                return;
+            }
+
+            RemoveTrailingUnderscores(folderPath);
+        }
+
+        // 添加按钮：将FBX后缀转为小写
+        if (GUILayout.Button("将FBX后缀转为小写"))
+        {
+            if (string.IsNullOrEmpty(folderPath))
+            {
+                Debug.LogError("路径不能为空！");
+                return;
+            }
+            if (!AssetDatabase.IsValidFolder(folderPath))
+            {
+                Debug.LogError($"路径无效: {folderPath}. 请确保输入的是一个有效的文件夹路径！");
+                return;
+            }
+
+            ConvertFbxExtensionToLowercase(folderPath);
+        }
+
+        // 添加按钮：替换#为下划线
+        if (GUILayout.Button("替换资产名称中的 '#' 为 '_'"))
+        {
+            if (string.IsNullOrEmpty(folderPath))
+            {
+                Debug.LogError("路径不能为空！");
+                return;
+            }
+            if (!AssetDatabase.IsValidFolder(folderPath))
+            {
+                Debug.LogError($"路径无效: {folderPath}. 请确保输入的是一个有效的文件夹路径！");
+                return;
+            }
+
+            ReplaceHashWithUnderscore(folderPath);
+        }
+
+        // 添加按钮：处理文件夹名称
+        if (GUILayout.Button("处理文件夹名称（替换空格、破折号和连续下划线）"))
+        {
+            if (string.IsNullOrEmpty(folderPath))
+            {
+                Debug.LogError("路径不能为空！");
+                return;
+            }
+            if (!AssetDatabase.IsValidFolder(folderPath))
+            {
+                Debug.LogError($"路径无效: {folderPath}. 请确保输入的是一个有效的文件夹路径！");
+                return;
+            }
+
+            ProcessFolderNames(folderPath);
+        }
+
         // 整合功能按钮 - 依次执行所有操作并在最后统一刷新
         if (GUILayout.Button("一键优化资产命名（批处理模式）"))
         {
@@ -149,6 +217,11 @@ public class AssetNameCheckerWindow : EditorWindow
     private static void BatchProcessAssetNames(string assetFolderPath)
     {
         Debug.Log("开始批处理资产命名优化...");
+
+        // 0. 首先处理文件夹名称 - 由于这会影响其他资产的路径，所以最先处理
+        Debug.Log("步骤0: 处理文件夹名称...");
+        int foldersRenamed = ProcessFolderNames(assetFolderPath, true);
+        bool needsRefresh = foldersRenamed > 0;
 
         // 搜集所有资产信息
         Debug.Log("正在收集资产信息...");
@@ -184,16 +257,11 @@ public class AssetNameCheckerWindow : EditorWindow
         int dashesReplaced = 0;
         int underscoresReplaced = 0;
         int texturesRenamed = 0;
-        bool needsRefresh = false;
-
-        // 记录包含中文字符的资产
-        List<string> assetsWithChineseCharacters = new List<string>();
 
         Regex regexMultipleUnderscores = new Regex("_{2,}"); // 匹配两个或更多连续的下划线
-        Regex regexChineseCharacters = new Regex(@"[\u4e00-\u9fa5\u3000-\u303F\uFF00-\uFFEF]+"); // 匹配中文字符和中文标点
 
-        // 1. 处理普通资产名称
-        Debug.Log("开始处理资产名称...");
+        // 1. 处理空格替换为下划线
+        Debug.Log("步骤1: 替换空格为下划线...");
         foreach (string guid in allAssetGuids)
         {
             string assetPath = AssetDatabase.GUIDToAssetPath(guid);
@@ -203,60 +271,159 @@ public class AssetNameCheckerWindow : EditorWindow
 
             string assetName = Path.GetFileNameWithoutExtension(assetPath);
             string extension = Path.GetExtension(assetPath);
-            bool needsRename = false;
-            string newAssetName = assetName;
 
-            // 检测中文字符
-            if (regexChineseCharacters.IsMatch(assetName))
+            if (assetName.Contains(" "))
             {
-                assetsWithChineseCharacters.Add(assetPath);
-            }
-
-            // 处理空格
-            if (newAssetName.Contains(" "))
-            {
-                newAssetName = newAssetName.Replace(" ", "_");
-                needsRename = true;
-                spacesReplaced++;
-            }
-
-            // 处理破折号
-            if (newAssetName.Contains("-"))
-            {
-                newAssetName = newAssetName.Replace("-", "_");
-                needsRename = true;
-                dashesReplaced++;
-            }
-
-            // 处理连续下划线
-            if (regexMultipleUnderscores.IsMatch(newAssetName))
-            {
-                string beforeReplace = newAssetName;
-                newAssetName = regexMultipleUnderscores.Replace(newAssetName, "_");
-                Debug.Log($"替换连续下划线: {assetPath}, {beforeReplace} -> {newAssetName}");
-                needsRename = true;
-                underscoresReplaced++;
-            }
-
-            // 如果需要重命名，执行重命名
-            if (needsRename)
-            {
+                string newAssetName = assetName.Replace(" ", "_");
                 string renameResult = AssetDatabase.RenameAsset(assetPath, newAssetName);
-                if (!string.IsNullOrEmpty(renameResult))
+                if (string.IsNullOrEmpty(renameResult))
                 {
-                    Debug.LogError($"资产重命名失败: {assetPath} -> {newAssetName}. 错误: {renameResult}");
+                    spacesReplaced++;
+                    needsRefresh = true;
                 }
-                needsRefresh = true;
+                else
+                {
+                    Debug.LogError($"资产重命名失败: {assetPath}. 错误: {renameResult}");
+                }
             }
         }
 
-        // 2. 处理贴图重命名
-        Debug.Log("开始处理贴图名称...");
+        // 2. 处理破折号替换为下划线
+        Debug.Log("步骤2: 替换破折号为下划线...");
+        // 重新获取资产列表，因为可能有些资产已经重命名
+        if (needsRefresh)
+        {
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+            allAssetGuids = AssetDatabase.FindAssets("", new[] { assetFolderPath });
+        }
+
+        foreach (string guid in allAssetGuids)
+        {
+            string assetPath = AssetDatabase.GUIDToAssetPath(guid);
+            // 跳过目录
+            if (Directory.Exists(assetPath) && !File.Exists(assetPath))
+                continue;
+
+            string assetName = Path.GetFileNameWithoutExtension(assetPath);
+            string extension = Path.GetExtension(assetPath);
+
+            // 检查名称中是否有破折号，使用更严格的检测
+            if (assetName.IndexOf("-") >= 0)
+            {
+                // 确保替换所有破折号，而不仅仅是第一个
+                string newAssetName = assetName.Replace("-", "_");
+
+                // 验证新名称确实不包含破折号
+                if (newAssetName.IndexOf("-") >= 0)
+                {
+                    Debug.LogError($"替换失败: {assetPath} 的名称中仍有破折号");
+                    continue;
+                }
+
+                string renameResult = AssetDatabase.RenameAsset(assetPath, newAssetName);
+                if (string.IsNullOrEmpty(renameResult))
+                {
+                    Debug.Log($"资产重命名（替换 '-' 为 '_'）: {newAssetName}", AssetDatabase.LoadAssetAtPath<Object>(AssetDatabase.GUIDToAssetPath(guid)));
+                    dashesReplaced++;
+                    needsRefresh = true;
+                }
+                else
+                {
+                    Debug.LogError($"资产重命名失败: {assetPath}. 错误: {renameResult}");
+                }
+            }
+        }
+
+        // 3. 处理连续下划线替换为单个下划线
+        Debug.Log("步骤3: 替换连续下划线为单个下划线...");
+        // 重新获取资产列表，因为可能有些资产已经重命名
+        if (needsRefresh)
+        {
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+            allAssetGuids = AssetDatabase.FindAssets("", new[] { assetFolderPath });
+        }
+
+        foreach (string guid in allAssetGuids)
+        {
+            string assetPath = AssetDatabase.GUIDToAssetPath(guid);
+            // 跳过目录
+            if (Directory.Exists(assetPath) && !File.Exists(assetPath))
+                continue;
+
+            string assetName = Path.GetFileNameWithoutExtension(assetPath);
+            string extension = Path.GetExtension(assetPath);
+
+            if (regexMultipleUnderscores.IsMatch(assetName))
+            {
+                string newAssetName = regexMultipleUnderscores.Replace(assetName, "_");
+                string renameResult = AssetDatabase.RenameAsset(assetPath, newAssetName);
+                if (string.IsNullOrEmpty(renameResult))
+                {
+                    underscoresReplaced++;
+                    needsRefresh = true;
+                }
+                else
+                {
+                    Debug.LogError($"资产重命名失败: {assetPath}. 错误: {renameResult}");
+                }
+            }
+        }
+
+        // 4. 修改贴图名称为材质球名称
+        Debug.Log("步骤4: 修改贴图名称为材质球名称...");
+        // 重新获取资产列表和材质球-贴图关系，因为可能有些资产已经重命名
+        if (needsRefresh)
+        {
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+
+            // 重新收集材质球和贴图关系
+            textureUsage.Clear();
+            materialGuids = AssetDatabase.FindAssets("t:Material", new[] { assetFolderPath });
+            foreach (string guid in materialGuids)
+            {
+                string materialPath = AssetDatabase.GUIDToAssetPath(guid);
+                Material material = AssetDatabase.LoadAssetAtPath<Material>(materialPath);
+                if (material == null)
+                    continue;
+
+                foreach (var texturePropertyName in material.GetTexturePropertyNames())
+                {
+                    Texture texture = material.GetTexture(texturePropertyName);
+                    if (texture == null)
+                        continue;
+
+                    string texturePath = AssetDatabase.GetAssetPath(texture);
+
+                    // 忽略.vox文件
+                    if (texturePath.EndsWith(".vox", System.StringComparison.OrdinalIgnoreCase))
+                    {
+                        Debug.Log($"跳过.vox文件: {texturePath}");
+                        continue;
+                    }
+
+                    if (!textureUsage.ContainsKey(texturePath))
+                    {
+                        textureUsage[texturePath] = new List<string>();
+                    }
+                    textureUsage[texturePath].Add(material.name);
+                }
+            }
+        }
+
         foreach (var entry in textureUsage)
         {
             string texturePath = entry.Key;
             List<string> materialNames = entry.Value;
             string textureName = Path.GetFileNameWithoutExtension(texturePath);
+
+            // 再次检查，忽略.vox文件（以防万一）
+            if (texturePath.EndsWith(".vox", System.StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
 
             // 确保贴图在我们的目标文件夹下
             if (!texturePath.StartsWith(assetFolderPath))
@@ -284,16 +451,113 @@ public class AssetNameCheckerWindow : EditorWindow
             }
             else
             {
-                Debug.LogWarning($"贴图 {texturePath} 被多个不同名称的材质球引用: {string.Join(", ", distinctMaterialNames)}");
+                Object textureAsset = AssetDatabase.LoadAssetAtPath<Object>(texturePath);
+                Debug.LogWarning($"贴图被多个不同名称的材质球引用: {string.Join(", ", distinctMaterialNames)}", textureAsset);
             }
         }
 
-        // 统一刷新
+        // 新增步骤: 移除文件名末尾的下划线
+        Debug.Log("步骤3.5: 移除文件名末尾的下划线...");
+        // 重新获取资产列表
+        if (needsRefresh)
+        {
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+            allAssetGuids = AssetDatabase.FindAssets("", new[] { assetFolderPath });
+        }
+
+        int trailingUnderscoresRemoved = 0;
+        Regex regexTrailingUnderscore = new Regex("_+$"); // 匹配文件名末尾的一个或多个下划线
+
+        foreach (string guid in allAssetGuids)
+        {
+            string assetPath = AssetDatabase.GUIDToAssetPath(guid);
+            // 跳过目录
+            if (Directory.Exists(assetPath) && !File.Exists(assetPath))
+                continue;
+
+            string assetName = Path.GetFileNameWithoutExtension(assetPath);
+            string extension = Path.GetExtension(assetPath);
+
+            // 检测并移除文件名末尾的下划线
+            if (regexTrailingUnderscore.IsMatch(assetName))
+            {
+                string newAssetName = regexTrailingUnderscore.Replace(assetName, "");
+
+                // 确保重命名后的名称不为空
+                if (string.IsNullOrEmpty(newAssetName))
+                {
+                    Debug.LogWarning($"移除末尾下划线后文件名为空: {assetPath}，跳过重命名");
+                    continue;
+                }
+
+                string renameResult = AssetDatabase.RenameAsset(assetPath, newAssetName);
+                if (string.IsNullOrEmpty(renameResult))
+                {
+                    trailingUnderscoresRemoved++;
+                    needsRefresh = true;
+                }
+                else
+                {
+                    Debug.LogError($"资产重命名失败: {assetPath}. 错误: {renameResult}");
+                }
+            }
+        }
+
+        // 添加新步骤: 将FBX后缀转为小写
+        Debug.Log("步骤4.5: 将FBX后缀转为小写...");
+        // 重新获取资产列表
+        if (needsRefresh)
+        {
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+        }
+
+        int fbxExtensionsConverted = ConvertFbxExtensionToLowercase(assetFolderPath, false);
+        if (fbxExtensionsConverted > 0)
+        {
+            needsRefresh = true;
+        }
+
+        // 1.5. 替换#为下划线
+        Debug.Log("步骤1.5: 替换#为下划线...");
+        int hashesReplaced = ReplaceHashWithUnderscore(assetFolderPath, false);
+        if (hashesReplaced > 0)
+        {
+            needsRefresh = true;
+        }
+
+        // 最后进行统一刷新
         if (needsRefresh)
         {
             Debug.Log("正在保存并刷新资源...");
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
+        }
+
+        // 5. 检测中文字符
+        Debug.Log("步骤5: 检测中文字符...");
+        // 收集中文字符的资产
+        List<string> assetsWithChineseCharacters = new List<string>();
+        Regex regexChineseCharacters = new Regex(@"[\u4e00-\u9fa5\u3000-\u303F\uFF00-\uFFEF]+"); // 匹配中文字符和中文标点
+
+        // 重新获取最新的资产列表
+        allAssetGuids = AssetDatabase.FindAssets("", new[] { assetFolderPath });
+
+        foreach (string guid in allAssetGuids)
+        {
+            string assetPath = AssetDatabase.GUIDToAssetPath(guid);
+            // 跳过目录
+            if (Directory.Exists(assetPath) && !File.Exists(assetPath))
+                continue;
+
+            string assetName = Path.GetFileNameWithoutExtension(assetPath);
+
+            // 检测中文字符
+            if (regexChineseCharacters.IsMatch(assetName))
+            {
+                assetsWithChineseCharacters.Add(assetPath);
+            }
         }
 
         // 输出包含中文字符的资产列表
@@ -315,7 +579,7 @@ public class AssetNameCheckerWindow : EditorWindow
             }
         }
 
-        Debug.Log($"批处理完成！共替换了 {spacesReplaced} 个资产的空格为'_'，替换了 {dashesReplaced} 个资产的'-'为'_'，处理了 {underscoresReplaced} 个资产的连续下划线，重命名了 {texturesRenamed} 个贴图。");
+        Debug.Log($"批处理完成！共重命名了 {foldersRenamed} 个文件夹，替换了 {spacesReplaced} 个资产的空格为'_'，替换了 {dashesReplaced} 个资产的'-'为'_'，处理了 {underscoresReplaced} 个资产的连续下划线，移除了 {trailingUnderscoresRemoved} 个资产名称末尾的下划线，将 {fbxExtensionsConverted} 个FBX后缀转为小写，重命名了 {texturesRenamed} 个贴图。");
     }
 
     private static void CheckAssetNaming(string assetFolderPath)
@@ -576,6 +840,14 @@ public class AssetNameCheckerWindow : EditorWindow
                     continue;
 
                 string texturePath = AssetDatabase.GetAssetPath(texture);
+
+                // 忽略.vox文件
+                if (texturePath.EndsWith(".vox", System.StringComparison.OrdinalIgnoreCase))
+                {
+                    Debug.Log($"跳过.vox文件: {texturePath}");
+                    continue;
+                }
+
                 if (!textureUsage.ContainsKey(texturePath))
                 {
                     textureUsage[texturePath] = new List<string>();
@@ -584,7 +856,7 @@ public class AssetNameCheckerWindow : EditorWindow
             }
         }
 
-        int renameCount = 0;
+        int texturesRenamed = 0;
 
         foreach (var entry in textureUsage)
         {
@@ -592,48 +864,52 @@ public class AssetNameCheckerWindow : EditorWindow
             List<string> materialNames = entry.Value;
             string textureName = Path.GetFileNameWithoutExtension(texturePath);
 
-            // 处理贴图被单个材质球引用的情况
-            if (materialNames.Count == 1)
+            // 再次检查，忽略.vox文件（以防万一）
+            if (texturePath.EndsWith(".vox", System.StringComparison.OrdinalIgnoreCase))
             {
-                string newTextureName = materialNames[0]; // 使用材质球的名称
+                continue;
+            }
+
+            // 确保贴图在我们的目标文件夹下
+            if (!texturePath.StartsWith(assetFolderPath))
+                continue;
+
+            // 处理贴图被单个材质球引用或多个相同名称材质球引用的情况
+            var distinctMaterialNames = materialNames.Distinct().ToList();
+            if (distinctMaterialNames.Count == 1)
+            {
+                string newTextureName = distinctMaterialNames[0];
 
                 if (textureName != newTextureName)
                 {
-                    RenameTexture(texturePath, newTextureName, ref renameCount, ref needsRefresh, false);
-                }
-            }
-            // 处理贴图被多个材质球引用的情况
-            else
-            {
-                // 检查所有引用该贴图的材质球名称是否相同
-                var distinctMaterialNames = materialNames.Distinct().ToList();
-
-                // 如果所有引用的材质球名称相同
-                if (distinctMaterialNames.Count == 1)
-                {
-                    string newTextureName = distinctMaterialNames[0];
-
-                    if (textureName != newTextureName)
+                    string renameResult = AssetDatabase.RenameAsset(texturePath, newTextureName);
+                    if (string.IsNullOrEmpty(renameResult))
                     {
-                        RenameTexture(texturePath, newTextureName, ref renameCount, ref needsRefresh, false);
+                        texturesRenamed++;
+                        needsRefresh = true;
+                    }
+                    else
+                    {
+                        Debug.LogError($"贴图重命名失败: {texturePath}. 错误: {renameResult}");
                     }
                 }
-                else
-                {
-                    Object textureAsset = AssetDatabase.LoadAssetAtPath<Object>(texturePath);
-                    Debug.LogWarning($"贴图被多个不同名称的材质球引用: {string.Join(", ", distinctMaterialNames)}", textureAsset);
-                }
+            }
+            else
+            {
+                Object textureAsset = AssetDatabase.LoadAssetAtPath<Object>(texturePath);
+                Debug.LogWarning($"贴图被多个不同名称的材质球引用: {string.Join(", ", distinctMaterialNames)}", textureAsset);
             }
         }
 
         if (needsRefresh && refreshAssets)
         {
+            Debug.Log("正在刷新资产数据库...");
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
         }
 
-        Debug.Log($"贴图重命名完成，共处理了 {renameCount} 个贴图！");
-        return renameCount;
+        Debug.Log($"贴图重命名完成，共处理了 {texturesRenamed} 个贴图！");
+        return texturesRenamed;
     }
 
     // 封装贴图重命名的逻辑为一个单独的方法
@@ -658,6 +934,331 @@ public class AssetNameCheckerWindow : EditorWindow
         else
         {
             Debug.LogError($"贴图重命名失败: {texturePath}. 错误: {renameResult}");
+        }
+    }
+
+    // 添加一个单独的函数来去除文件名末尾的下划线
+    private static int RemoveTrailingUnderscores(string assetFolderPath, bool refreshAssets = true)
+    {
+        string[] assetGuids = AssetDatabase.FindAssets("", new[] { assetFolderPath });
+        int renameCount = 0;
+        bool needsRefresh = false;
+        Regex regexTrailingUnderscore = new Regex("_+$"); // 匹配文件名末尾的一个或多个下划线
+
+        Debug.Log($"开始检查文件名末尾下划线，共找到 {assetGuids.Length} 个资产");
+
+        foreach (string guid in assetGuids)
+        {
+            string assetPath = AssetDatabase.GUIDToAssetPath(guid);
+            // 跳过目录
+            if (Directory.Exists(assetPath) && !File.Exists(assetPath))
+                continue;
+
+            string assetName = Path.GetFileNameWithoutExtension(assetPath);
+            string extension = Path.GetExtension(assetPath);
+
+            // 检测并移除文件名末尾的下划线
+            if (regexTrailingUnderscore.IsMatch(assetName))
+            {
+                string newAssetName = regexTrailingUnderscore.Replace(assetName, "");
+
+                // 确保重命名后的名称不为空
+                if (string.IsNullOrEmpty(newAssetName))
+                {
+                    Debug.LogWarning($"移除末尾下划线后文件名为空: {assetPath}，跳过重命名");
+                    continue;
+                }
+
+                string directory = Path.GetDirectoryName(assetPath);
+                string newAssetPath = Path.Combine(directory, newAssetName + extension).Replace("\\", "/");
+
+                Debug.Log($"检测到末尾下划线: {assetName}", AssetDatabase.LoadAssetAtPath<Object>(assetPath));
+
+                string renameResult = AssetDatabase.RenameAsset(assetPath, newAssetName);
+                if (string.IsNullOrEmpty(renameResult))
+                {
+                    Debug.Log($"资产重命名（移除末尾下划线）: {newAssetName}", AssetDatabase.LoadAssetAtPath<Object>(newAssetPath));
+                    renameCount++;
+                    needsRefresh = true;
+                }
+                else
+                {
+                    Debug.LogError($"资产重命名失败: {assetPath}. 错误: {renameResult}");
+                }
+            }
+        }
+
+        if (needsRefresh && refreshAssets)
+        {
+            Debug.Log("正在刷新资产数据库...");
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+        }
+
+        Debug.Log($"移除末尾下划线处理完成，共处理了 {renameCount} 个资产名称！");
+        return renameCount;
+    }
+
+    // 添加一个新的函数来将FBX后缀转为小写
+    private static int ConvertFbxExtensionToLowercase(string assetFolderPath, bool refreshAssets = true)
+    {
+        string[] assetGuids = AssetDatabase.FindAssets("t:Model", new[] { assetFolderPath });
+        int renameCount = 0;
+        bool needsRefresh = false;
+
+        Debug.Log($"开始处理FBX后缀大小写，共找到 {assetGuids.Length} 个模型资产");
+
+        foreach (string guid in assetGuids)
+        {
+            string assetPath = AssetDatabase.GUIDToAssetPath(guid);
+
+            // 检查扩展名是否为.FBX (大写)
+            if (Path.GetExtension(assetPath).Equals(".FBX", System.StringComparison.OrdinalIgnoreCase) &&
+                !Path.GetExtension(assetPath).Equals(".fbx")) // 避免已经是小写的也处理
+            {
+                string directory = Path.GetDirectoryName(assetPath);
+                string fileName = Path.GetFileNameWithoutExtension(assetPath);
+                string newPath = Path.Combine(directory, fileName + ".fbx").Replace("\\", "/");
+
+                // 由于Unity的AssetDatabase.RenameAsset不能更改扩展名，我们需要使用文件系统API
+                // 但在Unity中，我们需要先检查资产数据库状态
+                Object asset = AssetDatabase.LoadAssetAtPath<Object>(assetPath);
+                if (asset != null)
+                {
+                    Debug.Log($"检测到大写FBX后缀: {assetPath}", asset);
+
+                    try
+                    {
+                        // 使用AssetDatabase的方法修改文件名（包括扩展名）
+                        // 这是一个两步过程：
+                        // 1. 重命名为临时名称（加上时间戳避免冲突）
+                        string tempName = fileName + "_temp_" + System.DateTime.Now.Ticks;
+                        string tempResult = AssetDatabase.RenameAsset(assetPath, tempName);
+                        if (!string.IsNullOrEmpty(tempResult))
+                        {
+                            Debug.LogError($"重命名到临时名称失败: {assetPath} -> {tempName}. 错误: {tempResult}");
+                            continue;
+                        }
+
+                        string tempPath = Path.Combine(directory, tempName + Path.GetExtension(assetPath)).Replace("\\", "/");
+
+                        // 2. 重命名为原名称加小写扩展名
+                        string finalResult = AssetDatabase.RenameAsset(tempPath, fileName + ".fbx");
+                        if (string.IsNullOrEmpty(finalResult))
+                        {
+                            Debug.Log($"FBX后缀转为小写: {fileName}.FBX -> {fileName}.fbx", AssetDatabase.LoadAssetAtPath<Object>(newPath));
+                            renameCount++;
+                            needsRefresh = true;
+                        }
+                        else
+                        {
+                            Debug.LogError($"重命名失败: {tempPath} -> {fileName}.fbx. 错误: {finalResult}");
+                            // 尝试恢复原名
+                            AssetDatabase.RenameAsset(tempPath, fileName + Path.GetExtension(assetPath));
+                        }
+                    }
+                    catch (System.Exception ex)
+                    {
+                        Debug.LogError($"处理文件时出错: {assetPath}. 错误: {ex.Message}");
+                    }
+                }
+            }
+        }
+
+        if (needsRefresh && refreshAssets)
+        {
+            Debug.Log("正在刷新资产数据库...");
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+        }
+
+        Debug.Log($"FBX后缀转为小写处理完成，共处理了 {renameCount} 个资产！");
+        return renameCount;
+    }
+
+    // 添加替换#为下划线的功能
+    private static int ReplaceHashWithUnderscore(string assetFolderPath, bool refreshAssets = true)
+    {
+        string[] assetGuids = AssetDatabase.FindAssets("", new[] { assetFolderPath });
+        int renameCount = 0;
+        bool needsRefresh = false;
+        Regex regexMultipleUnderscores = new Regex("_{2,}"); // 匹配两个或更多连续的下划线
+
+        Debug.Log($"开始替换#为下划线，共找到 {assetGuids.Length} 个资产");
+
+        foreach (string guid in assetGuids)
+        {
+            string assetPath = AssetDatabase.GUIDToAssetPath(guid);
+            // 跳过目录
+            if (Directory.Exists(assetPath) && !File.Exists(assetPath))
+                continue;
+
+            string assetName = Path.GetFileNameWithoutExtension(assetPath);
+            string extension = Path.GetExtension(assetPath);
+            bool needsRename = false;
+            string newAssetName = assetName;
+
+            // 检测并替换 '#'
+            if (assetName.Contains("#"))
+            {
+                newAssetName = assetName.Replace("#", "_");
+                needsRename = true;
+            }
+
+            // 替换完#后立即检测并替换连续下划线
+            if (needsRename && regexMultipleUnderscores.IsMatch(newAssetName))
+            {
+                newAssetName = regexMultipleUnderscores.Replace(newAssetName, "_");
+            }
+
+            // 如果需要重命名，执行重命名
+            if (needsRename)
+            {
+                string directory = Path.GetDirectoryName(assetPath);
+                string newAssetPath = Path.Combine(directory, newAssetName + extension).Replace("\\", "/");
+
+                Debug.Log($"检测到含有#号: {assetName}", AssetDatabase.LoadAssetAtPath<Object>(assetPath));
+
+                string renameResult = AssetDatabase.RenameAsset(assetPath, newAssetName);
+                if (string.IsNullOrEmpty(renameResult))
+                {
+                    Debug.Log($"资产重命名（替换#为_）: {newAssetName}", AssetDatabase.LoadAssetAtPath<Object>(newAssetPath));
+                    renameCount++;
+                    needsRefresh = true;
+                }
+                else
+                {
+                    Debug.LogError($"资产重命名失败: {assetPath}. 错误: {renameResult}");
+                }
+            }
+        }
+
+        if (needsRefresh && refreshAssets)
+        {
+            Debug.Log("正在刷新资产数据库...");
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+        }
+
+        Debug.Log($"替换#为_处理完成，共处理了 {renameCount} 个资产名称！");
+        return renameCount;
+    }
+
+    // 修改ProcessFolderNames函数，添加替换#的功能
+    private static int ProcessFolderNames(string assetFolderPath, bool refreshAssets = true)
+    {
+        int renamedCount = 0;
+        bool needsRefresh = false;
+        List<string> allFolders = new List<string>();
+        Regex regexMultipleUnderscores = new Regex("_{2,}"); // 匹配两个或更多连续的下划线
+
+        // 收集所有文件夹路径
+        CollectAllFolders(assetFolderPath, allFolders);
+
+        // 按路径长度排序，确保先处理较短的路径（父文件夹）
+        // 使用降序排序，这样先处理深层目录，再处理上层目录
+        allFolders.Sort((a, b) => b.Length.CompareTo(a.Length));
+
+        Debug.Log($"开始处理文件夹名称，共找到 {allFolders.Count} 个文件夹");
+
+        foreach (string folderPath in allFolders)
+        {
+            string folderName = Path.GetFileName(folderPath);
+            string parentFolder = Path.GetDirectoryName(folderPath);
+            bool needsRename = false;
+            string newFolderName = folderName;
+
+            // 替换空格为下划线
+            if (newFolderName.Contains(" "))
+            {
+                newFolderName = newFolderName.Replace(" ", "_");
+                needsRename = true;
+            }
+
+            // 替换破折号为下划线
+            if (newFolderName.Contains("-"))
+            {
+                newFolderName = newFolderName.Replace("-", "_");
+                needsRename = true;
+            }
+
+            // 替换#为下划线
+            if (newFolderName.Contains("#"))
+            {
+                newFolderName = newFolderName.Replace("#", "_");
+                needsRename = true;
+            }
+
+            // 替换连续下划线为单个下划线
+            if (regexMultipleUnderscores.IsMatch(newFolderName))
+            {
+                newFolderName = regexMultipleUnderscores.Replace(newFolderName, "_");
+                needsRename = true;
+            }
+
+            // 如果需要重命名，执行重命名
+            if (needsRename)
+            {
+                string oldPath = folderPath;
+                string newPath = Path.Combine(parentFolder, newFolderName).Replace("\\", "/");
+
+                Debug.Log($"重命名文件夹: {oldPath} -> {newPath}");
+
+                // 使用AssetDatabase API重命名文件夹
+                string error = AssetDatabase.MoveAsset(oldPath, newPath);
+                if (string.IsNullOrEmpty(error))
+                {
+                    renamedCount++;
+                    needsRefresh = true;
+                }
+                else
+                {
+                    Debug.LogError($"重命名文件夹失败: {oldPath} -> {newPath}. 错误: {error}");
+                }
+            }
+        }
+
+        if (needsRefresh && refreshAssets)
+        {
+            Debug.Log("正在刷新资产数据库...");
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+        }
+
+        Debug.Log($"文件夹名称处理完成，共重命名了 {renamedCount} 个文件夹！");
+        return renamedCount;
+    }
+
+    // 递归收集所有文件夹
+    private static void CollectAllFolders(string rootFolder, List<string> allFolders)
+    {
+        if (!AssetDatabase.IsValidFolder(rootFolder))
+            return;
+
+        // 添加当前文件夹
+        allFolders.Add(rootFolder);
+
+        // 获取所有子文件夹
+        string[] guids = AssetDatabase.FindAssets("", new[] { rootFolder });
+        HashSet<string> subFolders = new HashSet<string>();
+
+        foreach (string guid in guids)
+        {
+            string path = AssetDatabase.GUIDToAssetPath(guid);
+            if (AssetDatabase.IsValidFolder(path) && path != rootFolder)
+            {
+                string parentFolder = Path.GetDirectoryName(path).Replace("\\", "/");
+                if (parentFolder == rootFolder)
+                {
+                    subFolders.Add(path);
+                }
+            }
+        }
+
+        // 递归处理每个子文件夹
+        foreach (string subFolder in subFolders)
+        {
+            CollectAllFolders(subFolder, allFolders);
         }
     }
 }
