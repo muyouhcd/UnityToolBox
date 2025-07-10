@@ -10,7 +10,6 @@ namespace DYM.ToolBox
     {
         private Vector2 scrollPosition;
         private Material selectedMaterial;
-        private static readonly string materialImportModePattern = @"materialImportMode: \d";
 
         string changeShaderName = "Universal Render Pipeline/Lit";
         string folderPath = "";
@@ -31,10 +30,6 @@ namespace DYM.ToolBox
 
             selectedMaterial = EditorGUILayout.ObjectField(selectedMaterial, typeof(Material), false) as Material;  // 控制对象字段的宽度
 
-            if (GUILayout.Button("更改导入方式"))
-            {
-                ModifySelectedMetaFiles(changeMaterialImportMode: true);
-            }
             // 如果用户点击了这个按钮，将触发更新.meta文件的操作
             if (GUILayout.Button("更新材质引用"))
             {
@@ -97,17 +92,12 @@ namespace DYM.ToolBox
         // private string ()
         // {}
 
-        private void ModifySelectedMetaFiles(bool changeMaterialImportMode = false, bool updateExternalObjects = false, bool removeExternalObjects = false)
+        private void ModifySelectedMetaFiles(bool updateExternalObjects = false, bool removeExternalObjects = false)
         {
             foreach (UnityEngine.Object obj in Selection.objects)
             {
                 string assetPath = AssetDatabase.GetAssetPath(obj);
                 string metaPath = AssetDatabase.GetTextMetaFilePathFromAssetPath(assetPath);
-
-                if (changeMaterialImportMode)
-                {
-                    ModifyMaterialImportMode(metaPath);
-                }
 
                 if (updateExternalObjects)
                 {
@@ -122,12 +112,6 @@ namespace DYM.ToolBox
 
             AssetDatabase.Refresh();
 
-        }
-        private void ModifyMaterialImportMode(string metaPath)
-        {
-            string metaContent = File.ReadAllText(metaPath);
-            metaContent = Regex.Replace(metaContent, materialImportModePattern, "materialImportMode: 1");
-            File.WriteAllText(metaPath, metaContent);
         }
         private void UpdateExternalObjectsWithName(string metaPath, UnityEngine.Object asset)
         {
@@ -507,7 +491,7 @@ namespace DYM.ToolBox
                     }
 
                     // 同时设置materialImportMode
-                    newContent = Regex.Replace(newContent, materialImportModePattern, "materialImportMode: 1");
+                    newContent = Regex.Replace(newContent, "materialImportMode: \\d", "materialImportMode: 1");
 
                     File.WriteAllText(metaPath, newContent);
                     Debug.Log("File written successfully");
