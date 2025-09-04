@@ -40,6 +40,15 @@ public class FbxAdder : MonoBehaviour
         }
         private AssetFormat selectedFormat = AssetFormat.FBX;
         private bool showFullResults = false; // 新增：控制是否显示完整结果
+        private bool showFoundAssets = true; // 控制找到的资产列表显示
+        private bool showNotFoundAssets = true; // 控制未找到的资产列表显示
+        private bool showNameListInput = true; // 控制名称列表输入区域显示
+        private bool showGenerationSettings = true; // 控制生成设置区域显示
+
+        // LOD文件包含选项
+        private bool includeLod0 = false; // 是否包含_Lod0文件
+        private bool includeLod1 = false; // 是否包含_Lod1文件
+        private bool includeLod2 = false; // 是否包含_Lod2文件
 
         [MenuItem("美术工具/批量添加工具/FbxAdder")]
         public static void ShowWindow()
@@ -62,11 +71,18 @@ public class FbxAdder : MonoBehaviour
             searchPath = EditorGUILayout.TextField("搜索路径:", searchPath);
             searchSubfolders = EditorGUILayout.Toggle("搜索子文件夹", searchSubfolders);
 
+            // LOD文件包含选项 - 横向排列
+            EditorGUILayout.BeginHorizontal();
+            includeLod0 = EditorGUILayout.Toggle("包含 _Lod0", includeLod0, GUILayout.ExpandWidth(true));
+            includeLod1 = EditorGUILayout.Toggle("包含 _Lod1", includeLod1, GUILayout.ExpandWidth(true));
+            includeLod2 = EditorGUILayout.Toggle("包含 _Lod2", includeLod2, GUILayout.ExpandWidth(true));
+            EditorGUILayout.EndHorizontal();
+
             // 资产格式选择 - 使用按钮形式
             EditorGUILayout.Space();
             EditorGUILayout.LabelField("资产格式选择", EditorStyles.boldLabel);
 
-            // 创建格式选择按钮 - 使用均分宽度
+            // 创建格式选择按钮 - 使用智能网格布局确保完美对齐
             EditorGUILayout.BeginHorizontal();
             GUI.backgroundColor = (selectedFormat == AssetFormat.FBX) ? Color.green : Color.white;
             if (GUILayout.Button("FBX格式", GUILayout.ExpandWidth(true), GUILayout.Height(30)))
@@ -80,10 +96,6 @@ public class FbxAdder : MonoBehaviour
                 selectedFormat = AssetFormat.Prefab;
                 Debug.Log("选择Prefab格式");
             }
-            GUI.backgroundColor = Color.white;
-            EditorGUILayout.EndHorizontal();
-
-            EditorGUILayout.BeginHorizontal();
             GUI.backgroundColor = (selectedFormat == AssetFormat.OBJ) ? Color.green : Color.white;
             if (GUILayout.Button("OBJ格式", GUILayout.ExpandWidth(true), GUILayout.Height(30)))
             {
@@ -99,70 +111,83 @@ public class FbxAdder : MonoBehaviour
             GUI.backgroundColor = Color.white;
             EditorGUILayout.EndHorizontal();
 
-            // 显示当前选择的格式
-            EditorGUILayout.LabelField($"当前选择: {selectedFormat}", EditorStyles.boldLabel);
 
-            // 添加格式说明
-            string formatDescription = GetFormatDescription(selectedFormat);
-            EditorGUILayout.LabelField(formatDescription, EditorStyles.helpBox);
+            // 名称列表输入 - 可折叠区域
+            showNameListInput = EditorGUILayout.Foldout(showNameListInput,
+                "名称列表输入 (换行分隔，不包含文件扩展名)", true, EditorStyles.foldoutHeader);
 
-            EditorGUILayout.Space();
-
-            // 名称列表输入
-            EditorGUILayout.LabelField("名称列表 (换行分隔，不包含文件扩展名):", EditorStyles.boldLabel);
-            nameList = EditorGUILayout.TextArea(nameList, GUILayout.Height(80), GUILayout.ExpandWidth(true)); // 使用ExpandWidth确保宽度一致
-
-            // 添加快速操作按钮
-            EditorGUILayout.BeginHorizontal();
-            if (GUILayout.Button("清空输入", GUILayout.ExpandWidth(true), GUILayout.Height(20)))
+            if (showNameListInput)
             {
-                nameList = "";
-                GUI.FocusControl(null); // 取消焦点
+                EditorGUI.indentLevel++;
+
+                nameList = EditorGUILayout.TextArea(nameList, GUILayout.Height(80), GUILayout.ExpandWidth(true));
+
+                // 添加快速操作按钮 - 使用智能网格布局确保完美对齐
+                EditorGUILayout.BeginHorizontal();
+                if (GUILayout.Button("清空输入", GUILayout.ExpandWidth(true), GUILayout.Height(20)))
+                {
+                    nameList = "";
+                    GUI.FocusControl(null); // 取消焦点
+                }
+                if (GUILayout.Button("示例格式", GUILayout.ExpandWidth(true), GUILayout.Height(20)))
+                {
+                    nameList = "模型1\n模型2\n建筑A\n树木B";
+                    GUI.FocusControl(null); // 取消焦点
+                }
+                EditorGUILayout.EndHorizontal();
+
+                EditorGUI.indentLevel--;
             }
-            if (GUILayout.Button("示例格式", GUILayout.ExpandWidth(true), GUILayout.Height(20)))
+
+            EditorGUILayout.Space();
+
+            // 生成设置 - 可折叠区域
+            showGenerationSettings = EditorGUILayout.Foldout(showGenerationSettings,
+                "生成设置", true, EditorStyles.foldoutHeader);
+
+            if (showGenerationSettings)
             {
-                nameList = "模型1\n模型2\n建筑A\n树木B";
-                GUI.FocusControl(null); // 取消焦点
+                EditorGUI.indentLevel++;
+
+                spawnOffset = EditorGUILayout.Vector3Field("生成位置偏移:", spawnOffset);
+                spacing = EditorGUILayout.FloatField("模型间距:", spacing);
+
+                EditorGUI.indentLevel--;
             }
-            EditorGUILayout.EndHorizontal();
+
+
 
             EditorGUILayout.Space();
 
-            // 生成设置
-            EditorGUILayout.LabelField("生成设置", EditorStyles.boldLabel);
-            spawnOffset = EditorGUILayout.Vector3Field("生成位置偏移:", spawnOffset);
-            spacing = EditorGUILayout.FloatField("模型间距:", spacing);
-
+            // 添加分隔线
+            EditorGUILayout.LabelField("", GUI.skin.horizontalSlider);
             EditorGUILayout.Space();
 
-            // 操作按钮 - 使用均分宽度，与窗口对齐
+            // 操作按钮 - 使用网格布局确保完美对齐
             EditorGUILayout.LabelField("操作", EditorStyles.boldLabel);
+
+            // 添加操作说明
+            EditorGUILayout.LabelField("按功能分组排列的操作按钮", EditorStyles.miniLabel);
+
+            // 第一行：查找和添加操作
             EditorGUILayout.BeginHorizontal();
             if (GUILayout.Button("查找资产文件", GUILayout.ExpandWidth(true), GUILayout.Height(30)))
             {
                 FindAssetFiles();
             }
-            if (GUILayout.Button("搜索所有格式", GUILayout.ExpandWidth(true), GUILayout.Height(30)))
-            {
-                FindMultipleFormats();
-            }
-            EditorGUILayout.EndHorizontal();
-
-            EditorGUILayout.BeginHorizontal();
             if (GUILayout.Button("添加到场景", GUILayout.ExpandWidth(true), GUILayout.Height(30)))
             {
                 AddAssetsToScene();
             }
+            EditorGUILayout.EndHorizontal();
+
+            // 第二行：清理操作
+            EditorGUILayout.BeginHorizontal();
             if (GUILayout.Button("清空搜索结果", GUILayout.ExpandWidth(true), GUILayout.Height(30)))
             {
                 ClearSearchResults();
             }
             EditorGUILayout.EndHorizontal();
-
-            if (GUILayout.Button("清空所有", GUILayout.ExpandWidth(true), GUILayout.Height(30)))
-            {
-                ClearLists();
-            }
 
             EditorGUILayout.Space();
 
@@ -171,65 +196,95 @@ public class FbxAdder : MonoBehaviour
             {
                 EditorGUILayout.LabelField("搜索结果", EditorStyles.boldLabel);
 
-                // 添加展开/折叠按钮
-                if (foundAssetPaths.Count > 10 || notFoundNames.Count > 10)
-                {
-                    showFullResults = EditorGUILayout.Toggle("显示完整结果", showFullResults);
-                    EditorGUILayout.Space();
-                }
 
+                // 找到的资产文件 - 可折叠区域
                 if (foundAssetPaths.Count > 0)
                 {
-                    EditorGUILayout.LabelField($"找到 {foundAssetPaths.Count} 个资产文件:", EditorStyles.boldLabel);
+                    showFoundAssets = EditorGUILayout.Foldout(showFoundAssets,
+                        $"✓ 找到 {foundAssetPaths.Count} 个资产文件", true, EditorStyles.foldoutHeader);
 
-                    if (showFullResults)
+                    if (showFoundAssets)
                     {
-                        // 显示所有结果
+                        EditorGUI.indentLevel++;
+
+                        // 添加复制按钮
+                        EditorGUILayout.BeginHorizontal();
+                        if (GUILayout.Button("复制所有路径", GUILayout.ExpandWidth(true), GUILayout.Height(20)))
+                        {
+                            string allPaths = string.Join("\n", foundAssetPaths);
+                            EditorGUIUtility.systemCopyBuffer = allPaths;
+                            Debug.Log($"已复制 {foundAssetPaths.Count} 个路径到剪贴板");
+                            EditorUtility.DisplayDialog("复制成功", $"已复制 {foundAssetPaths.Count} 个路径到剪贴板", "确定");
+                        }
+                        EditorGUILayout.EndHorizontal();
+
+                        // 显示所有结果 - 使用可选择的文本字段
                         foreach (string path in foundAssetPaths)
                         {
-                            EditorGUILayout.LabelField($"✓ {path}");
+                            EditorGUILayout.BeginHorizontal();
+                            EditorGUILayout.LabelField("✓", GUILayout.Width(20));
+
+                            // 使用只读的TextField，这样更容易选择和复制
+                            EditorGUI.BeginDisabledGroup(true);
+                            EditorGUILayout.TextField(path, GUILayout.Height(18));
+                            EditorGUI.EndDisabledGroup();
+
+                            // 添加单个复制按钮
+                            if (GUILayout.Button("复制", GUILayout.Width(50), GUILayout.Height(18)))
+                            {
+                                EditorGUIUtility.systemCopyBuffer = path;
+                                Debug.Log($"已复制路径: {path}");
+                            }
+                            EditorGUILayout.EndHorizontal();
                         }
-                    }
-                    else
-                    {
-                        // 限制显示的文件数量，避免UI过长
-                        int maxDisplay = Mathf.Min(foundAssetPaths.Count, 10);
-                        for (int i = 0; i < maxDisplay; i++)
-                        {
-                            EditorGUILayout.LabelField($"✓ {foundAssetPaths[i]}");
-                        }
-                        if (foundAssetPaths.Count > 10)
-                        {
-                            EditorGUILayout.LabelField($"... 还有 {foundAssetPaths.Count - 10} 个文件", EditorStyles.miniLabel);
-                        }
+
+                        EditorGUI.indentLevel--;
                     }
                 }
 
+                // 未找到的文件 - 可折叠区域
                 if (notFoundNames.Count > 0)
                 {
                     EditorGUILayout.Space();
-                    EditorGUILayout.LabelField($"未找到 {notFoundNames.Count} 个文件:", EditorStyles.boldLabel);
+                    showNotFoundAssets = EditorGUILayout.Foldout(showNotFoundAssets,
+                        $"✗ 未找到 {notFoundNames.Count} 个文件", true, EditorStyles.foldoutHeader);
 
-                    if (showFullResults)
+                    if (showNotFoundAssets)
                     {
-                        // 显示所有结果
+                        EditorGUI.indentLevel++;
+
+                        // 添加复制按钮
+                        EditorGUILayout.BeginHorizontal();
+                        if (GUILayout.Button("复制所有未找到的名称", GUILayout.ExpandWidth(true), GUILayout.Height(20)))
+                        {
+                            string allNames = string.Join("\n", notFoundNames);
+                            EditorGUIUtility.systemCopyBuffer = allNames;
+                            Debug.Log($"已复制 {notFoundNames.Count} 个未找到的名称到剪贴板");
+                            EditorUtility.DisplayDialog("复制成功", $"已复制 {notFoundNames.Count} 个未找到的名称到剪贴板", "确定");
+                        }
+                        EditorGUILayout.EndHorizontal();
+
+                        // 显示所有结果 - 使用可选择的文本字段
                         foreach (string name in notFoundNames)
                         {
-                            EditorGUILayout.LabelField($"✗ {name}");
+                            EditorGUILayout.BeginHorizontal();
+                            EditorGUILayout.LabelField("✗", GUILayout.Width(20));
+
+                            // 使用只读的TextField，这样更容易选择和复制
+                            EditorGUI.BeginDisabledGroup(true);
+                            EditorGUILayout.TextField(name, GUILayout.Height(18));
+                            EditorGUI.EndDisabledGroup();
+
+                            // 添加单个复制按钮
+                            if (GUILayout.Button("复制", GUILayout.Width(50), GUILayout.Height(18)))
+                            {
+                                EditorGUIUtility.systemCopyBuffer = name;
+                                Debug.Log($"已复制名称: {name}");
+                            }
+                            EditorGUILayout.EndHorizontal();
                         }
-                    }
-                    else
-                    {
-                        // 限制显示的名称数量
-                        int maxDisplay = Mathf.Min(notFoundNames.Count, 10);
-                        for (int i = 0; i < maxDisplay; i++)
-                        {
-                            EditorGUILayout.LabelField($"✗ {notFoundNames[i]}");
-                        }
-                        if (notFoundNames.Count > 10)
-                        {
-                            EditorGUILayout.LabelField($"... 还有 {notFoundNames.Count - 10} 个名称", EditorStyles.miniLabel);
-                        }
+
+                        EditorGUI.indentLevel--;
                     }
                 }
             }
@@ -237,31 +292,12 @@ public class FbxAdder : MonoBehaviour
             EditorGUILayout.EndScrollView();
         }
 
-        // 获取格式说明
-        private string GetFormatDescription(AssetFormat format)
-        {
-            switch (format)
-            {
-                case AssetFormat.FBX:
-                    return "搜索 .fbx 3D模型文件";
-                case AssetFormat.Prefab:
-                    return "搜索 .prefab Unity预制体文件";
-                case AssetFormat.OBJ:
-                    return "搜索 .obj 3D模型文件";
-                case AssetFormat.All:
-                    return "搜索所有支持的格式 (.fbx, .prefab, .obj)";
-                default:
-                    return "未知格式";
-            }
-        }
 
         private void FindAssetFiles()
         {
             foundAssetPaths.Clear();
             notFoundNames.Clear();
 
-            Debug.Log($"开始查找资产文件，选择的格式: {selectedFormat}");
-
             if (string.IsNullOrEmpty(nameList))
             {
                 EditorUtility.DisplayDialog("错误", "请输入名称列表", "确定");
@@ -279,135 +315,112 @@ public class FbxAdder : MonoBehaviour
                 return;
             }
 
-            Debug.Log($"要查找的名称数量: {names.Length}");
-
             foreach (string name in names)
             {
-                Debug.Log($"正在查找: {name}");
                 string assetPath = FindAssetFile(name);
                 if (!string.IsNullOrEmpty(assetPath))
                 {
                     foundAssetPaths.Add(assetPath);
-                    Debug.Log($"找到: {assetPath}");
                 }
                 else
                 {
                     notFoundNames.Add(name);
-                    Debug.Log($"未找到: {name}");
                 }
             }
-
-            Debug.Log($"查找完成: 找到 {foundAssetPaths.Count} 个文件，未找到 {notFoundNames.Count} 个文件");
         }
 
-        // 新增：搜索多种格式并合并结果
-        private void FindMultipleFormats()
-        {
-            if (string.IsNullOrEmpty(nameList))
-            {
-                EditorUtility.DisplayDialog("错误", "请输入名称列表", "确定");
-                return;
-            }
-
-            string[] names = nameList.Split('\n', '\r')
-                .Where(name => !string.IsNullOrWhiteSpace(name))
-                .Select(name => name.Trim())
-                .ToArray();
-
-            if (names.Length == 0)
-            {
-                EditorUtility.DisplayDialog("错误", "没有找到有效的名称", "确定");
-                return;
-            }
-
-            Debug.Log($"开始多格式搜索，名称数量: {names.Length}");
-
-            // 保存当前格式
-            AssetFormat originalFormat = selectedFormat;
-
-            // 搜索所有格式
-            foreach (AssetFormat format in System.Enum.GetValues(typeof(AssetFormat)))
-            {
-                if (format == AssetFormat.All) continue; // 跳过All选项
-
-                selectedFormat = format;
-                Debug.Log($"搜索格式: {format}");
-
-                foreach (string name in names)
-                {
-                    string assetPath = FindAssetFile(name);
-                    if (!string.IsNullOrEmpty(assetPath) && !foundAssetPaths.Contains(assetPath))
-                    {
-                        foundAssetPaths.Add(assetPath);
-                        Debug.Log($"找到 ({format}): {assetPath}");
-                    }
-                }
-            }
-
-            // 恢复原始格式
-            selectedFormat = originalFormat;
-
-            // 计算未找到的名称
-            notFoundNames.Clear();
-            foreach (string name in names)
-            {
-                bool found = false;
-                foreach (string path in foundAssetPaths)
-                {
-                    if (Path.GetFileNameWithoutExtension(path).Equals(name, System.StringComparison.OrdinalIgnoreCase))
-                    {
-                        found = true;
-                        break;
-                    }
-                }
-                if (!found)
-                {
-                    notFoundNames.Add(name);
-                }
-            }
-
-            Debug.Log($"多格式搜索完成: 找到 {foundAssetPaths.Count} 个文件，未找到 {notFoundNames.Count} 个文件");
-        }
 
         private string FindAssetFile(string fileName)
         {
-            string[] guids;
-            string searchPattern = "";
-
-            Debug.Log($"查找文件: {fileName}，格式: {selectedFormat}");
-
-            // 根据选择的格式构建搜索模式
-            switch (selectedFormat)
+            // 首先尝试在指定路径范围内搜索
+            string result = FindAssetInPath(fileName);
+            if (!string.IsNullOrEmpty(result))
             {
-                case AssetFormat.FBX:
-                    searchPattern = fileName + ".fbx";
-                    guids = AssetDatabase.FindAssets($"t:Model {fileName}");
-                    Debug.Log($"FBX模式，搜索模式: {searchPattern}，找到GUID数量: {guids.Length}");
-                    break;
-                case AssetFormat.Prefab:
-                    searchPattern = fileName + ".prefab";
-                    guids = AssetDatabase.FindAssets($"t:Prefab {fileName}");
-                    Debug.Log($"Prefab模式，搜索模式: {searchPattern}，找到GUID数量: {guids.Length}");
-                    break;
-                case AssetFormat.OBJ:
-                    searchPattern = fileName + ".obj";
-                    guids = AssetDatabase.FindAssets($"t:Model {fileName}");
-                    Debug.Log($"OBJ模式，搜索模式: {searchPattern}，找到GUID数量: {guids.Length}");
-                    break;
-                case AssetFormat.All:
-                    // 搜索所有支持的格式
-                    Debug.Log("使用All模式搜索所有格式");
-                    return FindAssetFileInAllFormats(fileName);
-                default:
-                    searchPattern = fileName + ".fbx";
-                    guids = AssetDatabase.FindAssets($"t:Model {fileName}");
-                    Debug.Log($"默认模式，搜索模式: {searchPattern}，找到GUID数量: {guids.Length}");
-                    break;
+                return result;
             }
 
-            if (searchSubfolders)
+            // 如果指定路径搜索失败，尝试全局搜索
+            return FindAssetGlobally(fileName);
+        }
+
+        // 在指定路径范围内搜索
+        private string FindAssetInPath(string fileName)
+        {
+            // 检查搜索路径是否存在
+            if (!System.IO.Directory.Exists(searchPath))
             {
-                // 通过GUID查找
+                return null;
+            }
+
+            // 根据选择的格式构建搜索模式
+            string[] extensions = GetExtensionsForFormat(selectedFormat);
+
+            foreach (string extension in extensions)
+            {
+                string searchPattern = fileName + extension;
+
+                // 首先尝试精确匹配
+                string[] files = Directory.GetFiles(searchPath, searchPattern,
+                    searchSubfolders ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly);
+
+                if (files.Length > 0)
+                {
+                    return files[0].Replace('\\', '/');
+                }
+
+                // 如果精确匹配失败，根据LOD选项决定是否进行模糊匹配
+                if (includeLod0 || includeLod1 || includeLod2)
+                {
+                    string[] allFiles = Directory.GetFiles(searchPath, "*" + extension,
+                        searchSubfolders ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly);
+
+                    foreach (string file in allFiles)
+                    {
+                        string fileNameWithoutExt = Path.GetFileNameWithoutExtension(file);
+
+                        // 检查是否包含基础文件名且匹配选中的LOD类型
+                        if (fileNameWithoutExt.StartsWith(fileName, System.StringComparison.OrdinalIgnoreCase) &&
+                            fileNameWithoutExt.Length > fileName.Length &&
+                            fileNameWithoutExt[fileName.Length] == '_')
+                        {
+                            string suffix = fileNameWithoutExt.Substring(fileName.Length + 1).ToLower();
+
+                            // 检查是否匹配选中的LOD类型（无视大小写）
+                            if ((includeLod0 && suffix.StartsWith("lod0")) ||
+                                (includeLod1 && suffix.StartsWith("lod1")) ||
+                                (includeLod2 && suffix.StartsWith("lod2")))
+                            {
+                                return file.Replace('\\', '/');
+                            }
+                        }
+                    }
+                }
+            }
+
+            return null;
+        }
+
+        // 全局搜索（使用AssetDatabase）
+        private string FindAssetGlobally(string fileName)
+        {
+            string[] extensions = GetExtensionsForFormat(selectedFormat);
+
+            foreach (string extension in extensions)
+            {
+                string searchPattern = fileName + extension;
+
+                // 使用AssetDatabase.FindAssets搜索
+                string[] guids;
+                if (extension == ".prefab")
+                {
+                    guids = AssetDatabase.FindAssets($"t:Prefab {fileName}");
+                }
+                else
+                {
+                    guids = AssetDatabase.FindAssets($"t:Model {fileName}");
+                }
+
+                // 首先尝试精确匹配
                 foreach (string guid in guids)
                 {
                     string path = AssetDatabase.GUIDToAssetPath(guid);
@@ -416,18 +429,53 @@ public class FbxAdder : MonoBehaviour
                         return path;
                     }
                 }
-            }
-            else
-            {
-                // 在指定路径下搜索
-                string[] files = Directory.GetFiles(searchPath, searchPattern, SearchOption.TopDirectoryOnly);
-                if (files.Length > 0)
+
+                // 如果精确匹配失败，根据LOD选项决定是否进行模糊匹配
+                if (includeLod0 || includeLod1 || includeLod2)
                 {
-                    return files[0].Replace('\\', '/');
+                    foreach (string guid in guids)
+                    {
+                        string path = AssetDatabase.GUIDToAssetPath(guid);
+                        string fileNameWithoutExt = Path.GetFileNameWithoutExtension(path);
+
+                        // 检查是否包含基础文件名且匹配选中的LOD类型
+                        if (fileNameWithoutExt.StartsWith(fileName, System.StringComparison.OrdinalIgnoreCase) &&
+                            fileNameWithoutExt.Length > fileName.Length &&
+                            fileNameWithoutExt[fileName.Length] == '_')
+                        {
+                            string suffix = fileNameWithoutExt.Substring(fileName.Length + 1).ToLower();
+
+                            // 检查是否匹配选中的LOD类型（无视大小写）
+                            if ((includeLod0 && suffix.StartsWith("lod0")) ||
+                                (includeLod1 && suffix.StartsWith("lod1")) ||
+                                (includeLod2 && suffix.StartsWith("lod2")))
+                            {
+                                return path;
+                            }
+                        }
+                    }
                 }
             }
 
             return null;
+        }
+
+        // 根据格式获取扩展名数组
+        private string[] GetExtensionsForFormat(AssetFormat format)
+        {
+            switch (format)
+            {
+                case AssetFormat.FBX:
+                    return new string[] { ".fbx" };
+                case AssetFormat.Prefab:
+                    return new string[] { ".prefab" };
+                case AssetFormat.OBJ:
+                    return new string[] { ".obj" };
+                case AssetFormat.All:
+                    return new string[] { ".fbx", ".prefab", ".obj" };
+                default:
+                    return new string[] { ".fbx" };
+            }
         }
 
         private string FindAssetFileInAllFormats(string fileName)
@@ -538,19 +586,20 @@ public class FbxAdder : MonoBehaviour
             }
         }
 
-        private void ClearLists()
-        {
-            foundAssetPaths.Clear();
-            notFoundNames.Clear();
-            nameList = "";
-            showFullResults = false; // 重置显示完整结果选项
-        }
 
         private void ClearSearchResults()
         {
             foundAssetPaths.Clear();
             notFoundNames.Clear();
         }
+
+
+
+
+
+
+
+
     }
 
     // 运行时方法（如果需要的话）
