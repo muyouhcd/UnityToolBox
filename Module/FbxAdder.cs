@@ -44,11 +44,17 @@ public class FbxAdder : MonoBehaviour
         private bool showNotFoundAssets = true; // 控制未找到的资产列表显示
         private bool showNameListInput = true; // 控制名称列表输入区域显示
         private bool showGenerationSettings = true; // 控制生成设置区域显示
+        private bool showCollectionSettings = true; // 控制收集设置区域显示
 
         // LOD文件包含选项
         private bool includeLod0 = false; // 是否包含_Lod0文件
         private bool includeLod1 = false; // 是否包含_Lod1文件
         private bool includeLod2 = false; // 是否包含_Lod2文件
+
+        // 资产收集设置
+        private string collectionPath = "Assets/CollectedAssets/"; // 收集目录
+        private bool preserveFolderStructure = true; // 是否保持文件夹结构
+        private bool includeTextures = false; // 是否包含同名贴图
 
         [MenuItem("美术工具/批量添加工具/FbxAdder")]
         public static void ShowWindow()
@@ -155,6 +161,47 @@ public class FbxAdder : MonoBehaviour
                 EditorGUI.indentLevel--;
             }
 
+            EditorGUILayout.Space();
+
+            // 资产收集设置 - 可折叠区域
+            showCollectionSettings = EditorGUILayout.Foldout(showCollectionSettings,
+                "资产收集设置", true, EditorStyles.foldoutHeader);
+
+            if (showCollectionSettings)
+            {
+                EditorGUI.indentLevel++;
+
+                collectionPath = EditorGUILayout.TextField("收集目录:", collectionPath);
+
+                EditorGUILayout.BeginHorizontal();
+                if (GUILayout.Button("选择收集目录", GUILayout.ExpandWidth(true), GUILayout.Height(20)))
+                {
+                    string selectedPath = EditorUtility.OpenFolderPanel("选择资产收集目录", collectionPath, "");
+                    if (!string.IsNullOrEmpty(selectedPath))
+                    {
+                        // 转换为Unity相对路径
+                        if (selectedPath.StartsWith(Application.dataPath))
+                        {
+                            collectionPath = "Assets" + selectedPath.Substring(Application.dataPath.Length);
+                        }
+                        else
+                        {
+                            collectionPath = selectedPath;
+                        }
+                        collectionPath = collectionPath.Replace('\\', '/');
+                        if (!collectionPath.EndsWith("/"))
+                            collectionPath += "/";
+                    }
+                }
+                EditorGUILayout.EndHorizontal();
+
+                preserveFolderStructure = EditorGUILayout.Toggle("保持文件夹结构", preserveFolderStructure);
+                includeTextures = EditorGUILayout.Toggle("包含同名贴图", includeTextures);
+
+
+                EditorGUI.indentLevel--;
+            }
+
 
 
             EditorGUILayout.Space();
@@ -181,7 +228,15 @@ public class FbxAdder : MonoBehaviour
             }
             EditorGUILayout.EndHorizontal();
 
-            // 第二行：清理操作
+            // 第二行：收集操作
+            EditorGUILayout.BeginHorizontal();
+            if (GUILayout.Button("收集资产到目录", GUILayout.ExpandWidth(true), GUILayout.Height(30)))
+            {
+                CollectAssetsToDirectory();
+            }
+            EditorGUILayout.EndHorizontal();
+
+            // 第三行：清理操作
             EditorGUILayout.BeginHorizontal();
             if (GUILayout.Button("清空搜索结果", GUILayout.ExpandWidth(true), GUILayout.Height(30)))
             {
@@ -593,12 +648,176 @@ public class FbxAdder : MonoBehaviour
             notFoundNames.Clear();
         }
 
+        // 收集资产到指定目录
+        private void CollectAssetsToDirectory()
+        {
+            if (foundAssetPaths.Count == 0)
+            {
+                EditorUtility.DisplayDialog("错误", "没有找到资产文件，请先执行查找", "确定");
+                return;
+            }
+
+            // 检查收集路径
+            if (string.IsNullOrEmpty(collectionPath))
+            {
+                EditorUtility.DisplayDialog("错误", "请设置收集目录", "确定");
+                return;
+            }
+
+            // 确保收集目录存在
+            if (!System.IO.Directory.Exists(collectionPath))
+            {
+                try
+                {
+                    System.IO.Directory.CreateDirectory(collectionPath);
+                    AssetDatabase.Refresh();
+                }
+                catch (System.Exception e)
+                {
+                    EditorUtility.DisplayDialog("错误", $"无法创建收集目录: {e.Message}", "确定");
+                    return;
+                }
+            }
+
+            int successCount = 0;
+            int failCount = 0;
+
+            Debug.Log($"开始收集 {foundAssetPaths.Count} 个资产到目录: {collectionPath}");
+
+            foreach (string assetPath in foundAssetPaths)
+            {
+                try
+                {
+                    // 收集主资产
+                    CollectSingleAsset(assetPath, ref successCount, ref failCount);
+
+                    // 如果启用了贴图收集，收集同名贴图
+                    if (includeTextures)
+                    {
+                        CollectRelatedTextures(assetPath, ref successCount, ref failCount);
+                    }
+                }
+                catch (System.Exception e)
+                {
+                    failCount++;
+                    Debug.LogError($"收集资产时发生错误 {assetPath}: {e.Message}");
+                }
+            }
+
+            // 刷新AssetDatabase
+            AssetDatabase.Refresh();
+
+            // 显示结果
+            if (failCount == 0)
+            {
+                EditorUtility.DisplayDialog("收集成功", $"成功收集 {successCount} 个资产到: {collectionPath}", "确定");
+                Debug.Log($"成功收集 {successCount} 个资产到目录");
+            }
+            else
+            {
+                EditorUtility.DisplayDialog("部分成功", $"成功收集 {successCount} 个资产，失败 {failCount} 个", "确定");
+                Debug.Log($"收集完成: 成功 {successCount} 个，失败 {failCount} 个");
+            }
+        }
 
 
 
 
 
 
+
+
+        // 收集单个资产
+        private void CollectSingleAsset(string assetPath, ref int successCount, ref int failCount)
+        {
+            try
+            {
+                string fileName = System.IO.Path.GetFileName(assetPath);
+                string targetPath = GetTargetPath(assetPath, fileName);
+
+                // 复制资产
+                AssetDatabase.CopyAsset(assetPath, targetPath);
+                successCount++;
+                Debug.Log($"成功收集: {assetPath} -> {targetPath}");
+            }
+            catch (System.Exception e)
+            {
+                failCount++;
+                Debug.LogError($"收集资产时发生错误 {assetPath}: {e.Message}");
+            }
+        }
+
+        // 收集相关贴图
+        private void CollectRelatedTextures(string assetPath, ref int successCount, ref int failCount)
+        {
+            try
+            {
+                string assetDir = System.IO.Path.GetDirectoryName(assetPath);
+                string assetNameWithoutExt = System.IO.Path.GetFileNameWithoutExtension(assetPath);
+
+                // 常见的贴图文件扩展名
+                string[] textureExtensions = { ".png", ".jpg", ".jpeg", ".tga", ".tiff", ".psd", ".bmp" };
+
+                foreach (string ext in textureExtensions)
+                {
+                    string texturePath = System.IO.Path.Combine(assetDir, assetNameWithoutExt + ext);
+
+                    // 检查贴图文件是否存在
+                    if (System.IO.File.Exists(texturePath))
+                    {
+                        // 转换为Unity路径
+                        string unityTexturePath = texturePath.Replace('\\', '/');
+                        if (unityTexturePath.StartsWith(Application.dataPath))
+                        {
+                            unityTexturePath = "Assets" + unityTexturePath.Substring(Application.dataPath.Length);
+                        }
+
+                        // 检查资产是否在项目中
+                        if (AssetDatabase.LoadAssetAtPath<Texture2D>(unityTexturePath) != null)
+                        {
+                            string fileName = System.IO.Path.GetFileName(unityTexturePath);
+                            string targetPath = GetTargetPath(unityTexturePath, fileName);
+
+                            // 复制贴图
+                            AssetDatabase.CopyAsset(unityTexturePath, targetPath);
+                            successCount++;
+                            Debug.Log($"成功收集贴图: {unityTexturePath} -> {targetPath}");
+                        }
+                    }
+                }
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning($"收集贴图时发生错误 {assetPath}: {e.Message}");
+            }
+        }
+
+        // 获取目标路径
+        private string GetTargetPath(string assetPath, string fileName)
+        {
+            string targetPath;
+
+            if (preserveFolderStructure)
+            {
+                // 保持文件夹结构
+                string relativePath = assetPath.Substring(7); // 移除 "Assets/"
+                targetPath = collectionPath + relativePath;
+
+                // 确保目标目录存在
+                string targetDir = System.IO.Path.GetDirectoryName(targetPath);
+                if (!System.IO.Directory.Exists(targetDir))
+                {
+                    System.IO.Directory.CreateDirectory(targetDir);
+                }
+            }
+            else
+            {
+                // 直接放在收集目录根目录
+                targetPath = collectionPath + fileName;
+            }
+
+            return targetPath;
+        }
 
     }
 
